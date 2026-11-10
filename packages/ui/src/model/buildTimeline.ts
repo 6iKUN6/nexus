@@ -243,6 +243,20 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
           summary: null,
         });
         break;
+      case 'handoff':
+        // Handoff cards are informational: the owner change itself shows up in
+        // the conversation metadata and the next runs are made by the receiver.
+        items.push({
+          kind: 'handoff',
+          id,
+          at,
+          fromHarnessId: body.fromHarnessId,
+          toHarnessId: body.toHarnessId,
+          goal: body.goal,
+          state: body.state,
+          problem: body.problem,
+        });
+        break;
       case 'task.updated': {
         // Fold the transition into the existing card; a missing card (gap in
         // the log) is skipped, the task list RPC is the fallback source.

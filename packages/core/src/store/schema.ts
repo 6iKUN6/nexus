@@ -1,6 +1,7 @@
 import type {
   ConversationEventBody,
   ConversationState,
+  Handoff,
   HarnessId,
   Isolation,
   TaskStatus,
@@ -24,6 +25,7 @@ export const conversations = sqliteTable('conversations', {
   isolation: text('isolation').$type<Isolation>().notNull(),
   baseCwd: text('base_cwd'),
   externalSessionId: text('external_session_id'),
+  ownerVersion: integer('owner_version').notNull(),
   state: text('state').$type<ConversationState>().notNull(),
   lastSeq: integer('last_seq').notNull(),
   preview: text('preview').notNull(),
@@ -52,7 +54,22 @@ export const tasks = sqliteTable('tasks', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+export const handoffs = sqliteTable('handoffs', {
+  id: text('id').primaryKey(),
+  conversationId: text('conversation_id').notNull(),
+  state: text('state').$type<Handoff['state']>().notNull(),
+  fromHarnessId: text('from_harness_id').$type<HarnessId>().notNull(),
+  toHarnessId: text('to_harness_id').$type<HarnessId>().notNull(),
+  /** Frozen at `prepared`; null before that. */
+  package: text('package', { mode: 'json' }).$type<Handoff['package']>(),
+  problem: text('problem'),
+  version: integer('version').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 export type ConversationRow = typeof conversations.$inferSelect;
 export type ConversationInsert = typeof conversations.$inferInsert;
 export type TaskRow = typeof tasks.$inferSelect;
 export type TaskInsert = typeof tasks.$inferInsert;
+export type HandoffRow = typeof handoffs.$inferSelect;

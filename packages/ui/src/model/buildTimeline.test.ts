@@ -196,3 +196,31 @@ describe('buildTimeline', () => {
     expect(after.items[2]).toMatchObject({ text: 'three', queued: true });
   });
 });
+
+describe('buildTimeline handoff (M4)', () => {
+  it('renders only final handoff states, keeping the problem text', () => {
+    const { items } = buildTimeline(
+      log(
+        { type: 'user.message', messageId: 'm1', text: '修跳转' },
+        {
+          type: 'handoff',
+          handoffId: 'h1',
+          fromHarnessId: 'fake',
+          toHarnessId: 'codex',
+          goal: '修跳转',
+          state: 'aborted',
+          problem: '无法确认原 Agent 已停止，交接已阻止。',
+        },
+        { type: 'run.started', runId: 'r1' },
+      ),
+    );
+    expect(items.map((i) => i.kind)).toEqual(['user', 'handoff']);
+    expect(items[1]).toMatchObject({
+      kind: 'handoff',
+      fromHarnessId: 'fake',
+      toHarnessId: 'codex',
+      state: 'aborted',
+      problem: '无法确认原 Agent 已停止，交接已阻止。',
+    });
+  });
+});

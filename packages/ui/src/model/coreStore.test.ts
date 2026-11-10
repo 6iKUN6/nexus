@@ -18,6 +18,7 @@ const conversation: Conversation = {
   isolation: 'direct',
   baseCwd: null,
   externalSessionId: null,
+  ownerVersion: 1,
   state: 'idle',
   lastSeq: 0,
   preview: '',
@@ -55,6 +56,9 @@ function setup(history: ConversationEvent[]) {
     'task.list': unused,
     'task.inbox': () => ({ items: [] }),
     'task.respond': unused,
+    'handoff.prepare': unused,
+    'handoff.commit': unused,
+    'handoff.cancel': unused,
   };
   serveRpc(serverPort, handlers);
   const store = new CoreStore(async () => createRpcClient(clientPort));

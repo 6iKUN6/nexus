@@ -15,6 +15,7 @@ import { sendNotification, serveRpc } from '@nexus/protocol';
 import { ConversationService, type HarnessRuntime } from './conversations/conversationService';
 import { harnessEnvironment } from './env/harnessEnvironment';
 import { resolveLoginShellPath } from './env/loginShellPath';
+import { HandoffService } from './handoff/handoffService';
 import { detectHarnesses, nodeDetectDeps } from './harness/detect';
 import { Store } from './store/store';
 import { TaskService } from './tasks/taskService';
@@ -123,6 +124,7 @@ export function createCore(options: CoreOptions): Core {
       ? mkdtempSync(join(tmpdir(), 'nexus-worktrees-'))
       : join(dirname(options.databasePath), 'worktrees'));
   let tasks: TaskService | null = null;
+  let handoffs: HandoffService | null = null;
   const conversations = new ConversationService({
     store,
     adapters: options.adapters,
@@ -142,6 +144,7 @@ export function createCore(options: CoreOptions): Core {
     onConversation: (conversation) => {
       broadcast('conversation.updated', conversation);
       tasks?.observeConversation(conversation);
+      handoffs?.observeConversation(conversation);
     },
   });
   const taskService = new TaskService({
@@ -151,9 +154,21 @@ export function createCore(options: CoreOptions): Core {
     newId: options.newId ?? randomUUID,
   });
   tasks = taskService;
+  const handoffService = new HandoffService({
+    store,
+    conversations,
+    adapters: options.adapters,
+    gitRun: options.gitRun ?? realGitRun,
+    now,
+    newId: options.newId ?? randomUUID,
+  });
+  handoffs = handoffService;
   conversations.recoverInterruptedRuns();
   // Tasks whose child settled while core was down still get their transition.
   taskService.reconcile();
+  // Handoffs interrupted by the exit: before the commit the original owner
+  // stays, after it the receiver does (plan §7). Nothing is retried.
+  handoffService.reconcile();
 
   const handlers: RpcHandlers = {
     'system.ping': () => ({
@@ -182,6 +197,9 @@ export function createCore(options: CoreOptions): Core {
     'task.list': ({ conversationId }) => taskService.list(conversationId),
     'task.inbox': () => ({ items: taskService.inbox() }),
     'task.respond': (params) => taskService.respond(params),
+    'handoff.prepare': async (params) => ({ handoff: await handoffService.prepare(params) }),
+    'handoff.commit': async (params) => handoffService.commit(params),
+    'handoff.cancel': (params) => ({ handoff: handoffService.cancel(params) }),
   };
 
   return {

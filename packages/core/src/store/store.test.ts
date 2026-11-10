@@ -1,10 +1,10 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Conversation, ConversationEventBody, Task } from '@nexus/protocol';
+import type { Conversation, ConversationEventBody, Handoff, Task } from '@nexus/protocol';
 import sqlite from 'better-sqlite3';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Store } from './store';
+import { Store, VersionConflict } from './store';
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -25,6 +25,7 @@ const conversation = (over: Partial<Conversation> = {}): Conversation => ({
   isolation: 'direct',
   baseCwd: null,
   externalSessionId: null,
+  ownerVersion: 1,
   state: 'idle',
   lastSeq: 0,
   preview: '工作目录 repo',
@@ -198,5 +199,82 @@ describe('Store', () => {
     const updated = store.updateTaskStatus('t1', 'review', '做完了', 20);
     expect(updated).toMatchObject({ status: 'review', resultSummary: '做完了', updatedAt: 20 });
     expect(store.getTask('t1')).toEqual(updated);
+  });
+});
+
+describe('handoff storage (M4)', () => {
+  const handoff = (over: Partial<Handoff> = {}): Handoff => ({
+    id: 'h1',
+    conversationId: 'c1',
+    state: 'prepared',
+    fromHarnessId: 'fake',
+    toHarnessId: 'codex',
+    package: {
+      schemaVersion: 1,
+      conversationId: 'c1',
+      fromHarnessId: 'fake',
+      toHarnessId: 'codex',
+      ownerVersion: 1,
+      goal: '修跳转',
+      nextAction: '复现',
+      userRequirements: [{ text: '保持兼容', sourceMessageId: 'm1' }],
+      confirmedFacts: [],
+      assumptions: [],
+      workspace: { root: '/repo', baseCommit: 'abc', dirtyDiff: null, untrackedFiles: [] },
+      omitted: [],
+      estimatedTokens: 10,
+    },
+    problem: null,
+    version: 1,
+    createdAt: 1,
+    updatedAt: 1,
+    ...over,
+  });
+
+  it('commits ownership and the handoff together, bumping the owner version', () => {
+    const store = new Store(':memory:');
+    cleanups.push(() => store.close());
+    store.insertConversation(conversation({ externalSessionId: 'fake-session' }));
+    store.insertHandoff(handoff());
+
+    const { handoff: committed, conversation: owner } = store.commitHandoff({
+      handoffId: 'h1',
+      expectedHandoffVersion: 1,
+      preview: '已交接',
+      now: 9,
+    });
+    expect(committed).toMatchObject({ state: 'committed', version: 2 });
+    // The old session id is meaningless to the new adapter, so it is dropped.
+    expect(owner).toMatchObject({
+      harnessId: 'codex',
+      externalSessionId: null,
+      ownerVersion: 2,
+      preview: '已交接',
+    });
+    expect(store.getConversation('c1')).toEqual(owner);
+    // `committed` stays open on purpose: boot reconciliation still has to
+    // confirm the receiver started (ADR 0011).
+    expect(store.listOpenHandoffs()).toMatchObject([{ state: 'committed' }]);
+  });
+
+  it('writes nothing when the handoff version or the owner version is stale', () => {
+    const store = new Store(':memory:');
+    cleanups.push(() => store.close());
+    store.insertConversation(conversation());
+    store.insertHandoff(handoff());
+
+    expect(() =>
+      store.commitHandoff({ handoffId: 'h1', expectedHandoffVersion: 7, preview: '', now: 9 }),
+    ).toThrow(VersionConflict);
+    // Simulate another change of owner after the package was frozen.
+    store.insertConversation(conversation({ id: 'c2' }));
+    store.commitHandoff({ handoffId: 'h1', expectedHandoffVersion: 1, preview: '', now: 9 });
+    expect(store.getConversation('c1')).toMatchObject({ harnessId: 'codex' });
+    const stale = handoff({ version: 3 });
+    store.insertHandoff({ ...stale, id: 'h2', package: stale.package });
+    expect(() =>
+      store.commitHandoff({ handoffId: 'h2', expectedHandoffVersion: 3, preview: '', now: 9 }),
+    ).toThrow(VersionConflict); // owner is now codex, package froze fake
+    expect(store.getConversation('c1')).toMatchObject({ harnessId: 'codex', ownerVersion: 2 });
   });
 });

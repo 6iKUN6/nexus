@@ -1,4 +1,4 @@
-import type { HarnessId, PermissionOption, TaskStatus } from '@nexus/protocol';
+import type { HandoffState, HarnessId, PermissionOption, TaskStatus } from '@nexus/protocol';
 
 /**
  * View models: what the screen renders. Derived from core events by
@@ -68,6 +68,17 @@ export type TimelineItem =
       status: TaskStatus;
       /** Latest result summary (review) or the feedback sent back (running). */
       summary: string | null;
+    }
+  | {
+      kind: 'handoff';
+      id: string;
+      at: number;
+      fromHarnessId: HarnessId;
+      toHarnessId: HarnessId;
+      goal: string;
+      /** Final state only: transient steps are never written to the log. */
+      state: Extract<HandoffState, 'committed' | 'aborted' | 'needs_reconciliation'>;
+      problem: string | null;
     }
   | { kind: 'system'; id: string; text: string };
 

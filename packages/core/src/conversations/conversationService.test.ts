@@ -357,3 +357,39 @@ describe('isolation (ADR 0006)', () => {
     expect(used).toMatchObject({ exists: true, directInUse: true });
   });
 });
+
+describe('handoff support (M4)', () => {
+  it('stopSession records the active run as cancelled, never as an unknown result', async () => {
+    const adapter = createFakeAdapter({
+      script: Array.from({ length: 20 }, () => ({ kind: 'text' as const, text: '.' })),
+      stepDelayMs: 50,
+    });
+    const { service, events } = setup(adapter);
+    const c = await service.create({ harnessId: 'fake', cwd: tmpdir() });
+    service.send(c.id, '开始');
+    await waitFor(() => events.some((e) => e.body.type === 'run.started'));
+
+    await expect(service.stopSession(c.id)).resolves.toEqual({ confirmed: true, problem: null });
+    // The process was stopped on purpose: the log must not say "result unknown".
+    await waitFor(() =>
+      events.some((e) => e.body.type === 'run.completed' && e.body.stopReason === 'cancelled'),
+    );
+    expect(events.some((e) => e.body.type === 'run.failed')).toBe(false);
+    expect(service.list()[0]).toMatchObject({ state: 'idle' });
+  });
+
+  it('holds prompts during a handoff and starts them on release', async () => {
+    const { service, events } = setup();
+    const c = await service.create({ harnessId: 'fake', cwd: tmpdir() });
+    service.hold(c.id);
+    const { queued } = service.send(c.id, '交接期间');
+    expect(queued).toBe(true);
+    expect(service.queuedCount(c.id)).toBe(1);
+    await new Promise((resolve) => setTimeout(resolve, 50));
+    expect(events.some((e) => e.body.type === 'run.started')).toBe(false);
+
+    service.releaseHold(c.id);
+    await waitFor(() => events.some((e) => e.body.type === 'run.completed'));
+    expect(service.queuedCount(c.id)).toBe(0);
+  });
+});

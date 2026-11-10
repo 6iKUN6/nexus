@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { conversationEventSchema, conversationSchema, isolationSchema } from './conversation';
+import { handoffSchema } from './handoff';
 import { harnessIdSchema, harnessInfoSchema } from './harness';
 import { taskSchema, taskStatusSchema } from './task';
 
@@ -95,6 +96,34 @@ export const rpcMethods = {
     result: z.object({
       items: z.array(z.object({ conversationId: z.string(), status: taskStatusSchema })),
     }),
+  },
+  /**
+   * Stops the source agent (verified) and freezes a context package for review
+   * (M4, ADR 0011). Nothing changes owner until `handoff.commit`.
+   */
+  'handoff.prepare': {
+    params: z.object({
+      conversationId: z.string(),
+      toHarnessId: harnessIdSchema,
+      /** What the task is; defaults to the conversation title on the UI side. */
+      goal: z.string().trim().min(1).max(500),
+      /** What the receiver should do first. */
+      nextAction: z.string().trim().min(1).max(1000),
+      /** User-authored facts and hypotheses; the package keeps them apart. */
+      facts: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+      assumptions: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
+    }),
+    result: z.object({ handoff: handoffSchema }),
+  },
+  /** Commits a reviewed package: swaps the owner (CAS on the version) and starts the receiver. */
+  'handoff.commit': {
+    params: z.object({ handoffId: z.string(), version: z.number().int().positive() }),
+    result: z.object({ handoff: handoffSchema, conversation: conversationSchema }),
+  },
+  /** Drops a prepared handoff; the original owner stays in charge. */
+  'handoff.cancel': {
+    params: z.object({ handoffId: z.string() }),
+    result: z.object({ handoff: handoffSchema }),
   },
   /** Accepts a result or sends it back with feedback (which re-runs the child). */
   'task.respond': {

@@ -5,6 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PERSONAS, type TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
 import { DelegationCard } from './DelegationCard';
+import { HandoffCard } from './HandoffCard';
 import { MessageText } from './MessageText';
 import { FailureCard, PermissionCard, ThinkingCard, ToolCard } from './TimelineCards';
 
@@ -214,6 +215,7 @@ function TimelineRow({
               onRespond={onTaskRespond}
             />
           )}
+          {item.kind === 'handoff' && <HandoffCard item={item} />}
         </div>
       );
   }

@@ -12,6 +12,7 @@ import {
   RpcError,
   type StopResult,
 } from '@nexus/protocol';
+import { harnessLabel } from '../harness/catalog';
 import type { ConversationPatch, Store } from '../store/store';
 import { findRepoRoot, type GitRun, type WorktreeManager } from '../worktree/gitWorktree';
 
@@ -74,6 +75,14 @@ export class ConversationService {
   /** Runs waiting for a free slot, FIFO across conversations. */
   private waiting: Array<{ conversationId: string; prompt: QueuedPrompt }> = [];
   /**
+   * Conversations whose handoff is being reviewed. Their source agent has been
+   * stopped, so prompts must not start a run under it; they wait in the queue
+   * and the new owner picks them up after the commit (plan §7).
+   */
+  private readonly held = new Set<string>();
+  /** Runs whose session was stopped on purpose; their stream end is a cancel, not a failure. */
+  private readonly stoppedRuns = new Set<string>();
+  /**
    * Set while shutting down. Aborting a session makes adapters emit a terminal
    * `cancelled` event; persisting it would make an interrupted run look like a
    * clean user cancel. During shutdown events are dropped instead, so the next
@@ -115,6 +124,40 @@ export class ConversationService {
               ? '子任务已通过验收'
               : '子任务继续进行中';
     this.append(conversationId, body, { preview });
+  }
+
+  /** Records a handoff outcome on the conversation's log (M4, ADR 0011). */
+  recordHandoffEvent(
+    conversationId: string,
+    body: Extract<ConversationEventBody, { type: 'handoff' }>,
+  ): void {
+    this.require(conversationId);
+    const target = harnessLabel(body.toHarnessId);
+    const preview =
+      body.state === 'committed'
+        ? truncate(`已交接给 ${target}`)
+        : truncate(`交接未完成：${body.problem ?? '原因未知'}`);
+    this.append(conversationId, body, { preview });
+  }
+
+  /**
+   * Prompts written but not yet started (the conversation's own queue plus the
+   * global slot queue). A handoff must not silently discard them.
+   */
+  queuedCount(conversationId: string): number {
+    const own = this.live.get(conversationId)?.queue.length ?? 0;
+    return own + this.waiting.filter((w) => w.conversationId === conversationId).length;
+  }
+
+  /** Holds a conversation for a handoff: prompts queue instead of starting. */
+  hold(conversationId: string): void {
+    this.held.add(conversationId);
+  }
+
+  /** Ends the hold and starts whatever queued up meanwhile, under the new owner. */
+  releaseHold(conversationId: string): void {
+    this.held.delete(conversationId);
+    this.nextInConversation(conversationId);
   }
 
   events(conversationId: string, afterSeq: number): ConversationEvent[] {
@@ -173,6 +216,7 @@ export class ConversationService {
       isolation,
       baseCwd,
       externalSessionId: null,
+      ownerVersion: 1,
       state: 'idle',
       lastSeq: 0,
       preview: `工作目录 ${basename(actualCwd)}`,
@@ -196,7 +240,7 @@ export class ConversationService {
     return { exists, isGitRepo: repoRoot !== null, repoRoot, directInUse };
   }
 
-  send(conversationId: string, text: string) {
+  send(conversationId: string, text: string, options: { front?: boolean } = {}) {
     const conversation = this.require(conversationId);
     const live = this.liveFor(conversationId);
     const messageId = this.newId();
@@ -213,12 +257,13 @@ export class ConversationService {
 
     // A prompt is queued when its conversation is busy, or when every global
     // run slot is taken (plan §7: at most 3 harness processes at once).
-    const busy = live.activeRunId !== null;
+    const busy = live.activeRunId !== null || live.queue.length > 0;
     const hasSlot = this.running.size < this.maxConcurrentRuns;
-    const queued = busy || !hasSlot;
+    const queued = busy || !hasSlot || this.held.has(conversationId);
     if (queued) this.append(conversationId, { type: 'run.queued', runId, messageId }, {});
-    if (busy) {
-      live.queue.push({ runId, text });
+    if (busy || this.held.has(conversationId)) {
+      if (options.front) live.queue.unshift({ runId, text });
+      else live.queue.push({ runId, text });
     } else {
       live.activeRunId = runId;
       if (hasSlot) {
@@ -326,10 +371,17 @@ export class ConversationService {
     const live = this.live.get(conversationId);
     const session = live?.session;
     // A run waiting for a global slot has no process; drop it too, or it would
-    // start later in a session the caller believes is stopped.
+    // start later in a session the caller believes is stopped. Its prompt stays
+    // in the queue below so it can run under a new owner.
     this.waiting = this.waiting.filter((w) => w.conversationId !== conversationId);
     this.running.delete(conversationId);
-    this.live.delete(conversationId);
+    if (live) {
+      // Keep the queue: it is redispatched after a handoff commits. The
+      // session itself belongs to the old owner and must not be reused.
+      if (live.activeRunId) this.stoppedRuns.add(live.activeRunId);
+      live.session = null;
+      live.activeRunId = null;
+    }
     if (!session) return { confirmed: true, problem: null };
     return session.dispose();
   }
@@ -433,8 +485,9 @@ export class ConversationService {
   /** Starts the next prompt typed in this conversation while it was busy. */
   private nextInConversation(conversationId: string): void {
     const live = this.live.get(conversationId);
-    const next = live?.queue.shift();
-    if (!live || !next) return;
+    if (!live || this.held.has(conversationId)) return;
+    const next = live.queue.shift();
+    if (!next) return;
     live.activeRunId = next.runId;
     if (this.running.size < this.maxConcurrentRuns) {
       this.running.add(conversationId);
@@ -461,7 +514,14 @@ export class ConversationService {
         this.append(conversationId, event, finishedWithReply ? { preview: truncate(reply) } : {});
       }
     } catch (error) {
-      if (!terminal) {
+      if (!terminal && this.stoppedRuns.has(prompt.runId)) {
+        terminal = true;
+        this.append(
+          conversationId,
+          { type: 'run.completed', runId: prompt.runId, stopReason: 'cancelled' },
+          { state: 'idle', preview: '已停止运行' },
+        );
+      } else if (!terminal) {
         terminal = true;
         this.append(
           conversationId,
@@ -478,16 +538,27 @@ export class ConversationService {
       }
     }
     if (!terminal) {
-      this.append(
-        conversationId,
-        {
-          type: 'run.failed',
-          runId: prompt.runId,
-          error: { code: 'no_terminal_event', message: '运行结束时没有收到完成事件，结果未知。' },
-        },
-        {},
-      );
+      if (this.stoppedRuns.has(prompt.runId)) {
+        // The process was killed by request, not lost: this is a cancel, and
+        // calling it "result unknown" would alarm the user about nothing.
+        this.append(
+          conversationId,
+          { type: 'run.completed', runId: prompt.runId, stopReason: 'cancelled' },
+          { state: 'idle', preview: '已停止运行' },
+        );
+      } else {
+        this.append(
+          conversationId,
+          {
+            type: 'run.failed',
+            runId: prompt.runId,
+            error: { code: 'no_terminal_event', message: '运行结束时没有收到完成事件，结果未知。' },
+          },
+          {},
+        );
+      }
     }
+    this.stoppedRuns.delete(prompt.runId);
     live.activeRunId = null;
     this.running.delete(conversationId);
     // Free slot first, so a globally waiting run can take it; then this

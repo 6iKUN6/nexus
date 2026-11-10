@@ -43,4 +43,21 @@ export const MIGRATIONS: string[] = [
    );
    CREATE INDEX tasks_by_parent ON tasks (parent_conversation_id);
    CREATE INDEX tasks_by_child ON tasks (child_conversation_id);`,
+  // M4 handoff (ADR 0011): owner version for compare-and-set, plus the handoff
+  // records. Prepared packages are frozen JSON: they are a historical record,
+  // so a later schema change must not rewrite them.
+  `ALTER TABLE conversations ADD COLUMN owner_version INTEGER NOT NULL DEFAULT 1;
+   CREATE TABLE handoffs (
+     id TEXT PRIMARY KEY,
+     conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+     state TEXT NOT NULL,
+     from_harness_id TEXT NOT NULL,
+     to_harness_id TEXT NOT NULL,
+     package TEXT,
+     problem TEXT,
+     version INTEGER NOT NULL,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );
+   CREATE INDEX handoffs_by_conversation ON handoffs (conversation_id);`,
 ];

@@ -8,6 +8,12 @@ export type HarnessDefinition = {
 };
 
 /** Harnesses detected on startup. Order is the display order. */
+/** Display name for a harness id, including the dev-only fake harness. */
+export function harnessLabel(id: HarnessId): string {
+  if (id === 'fake') return 'Fake';
+  return HARNESS_CATALOG.find((def) => def.id === id)?.displayName ?? id;
+}
+
 export const HARNESS_CATALOG: readonly HarnessDefinition[] = [
   {
     id: 'claude-code',

@@ -16,7 +16,7 @@ type ComposerProps = {
   onDraftChange: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
-  /** 'delegate' opens the real dialog (M3); 'handoff' opens the M4 design preview. */
+  /** 'delegate' opens the delegation dialog (M3); 'handoff' opens the handoff drawer (M4). */
   onCollaboration: (kind: 'delegate' | 'handoff') => void;
 };
 
@@ -76,7 +76,7 @@ export function Composer(props: ComposerProps) {
               委派
             </Button>
           </Tooltip>
-          <Tooltip content="M4 开放：预览交接流程" mini>
+          <Tooltip content="停止当前 Agent，把任务交给另一个 Agent 在同一目录继续" mini>
             <Button
               size="small"
               type="text"

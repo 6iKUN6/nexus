@@ -10,7 +10,13 @@ check('首次启动显示欢迎页', true);
 await click('text=新会话 ⌘T');
 await until(`!!document.querySelector('.arco-modal')`, 'modal');
 // The harness list arrives over RPC after core spawns; wait for it, don't assume.
-await until(`document.querySelectorAll('.arco-modal .arco-radio').length >= 4`, 'harness list');
+// Detection resolves the login-shell PATH and probes every CLI; a cold start
+// can take longer than the default 10s.
+await until(
+  `document.querySelectorAll('.arco-modal .arco-radio').length >= 4`,
+  'harness list',
+  30000,
+);
 const radios = await ev(
   `[...document.querySelectorAll('.arco-modal .arco-radio')].map(r => r.innerText.replace(/\\s+/g,' ').trim() + (r.classList.contains('arco-radio-disabled') ? ' [disabled]' : ''))`,
 );
@@ -162,6 +168,53 @@ check(
   '验收通过 → 卡片标记已通过，待办消失',
   !(await ev(`document.body.innerText.includes('子任务待验收')`)),
 );
+
+// --- M4 handoff: prepare (stops the source) → review package → cancel ---
+await click('text=交接');
+const drawer = '.arco-drawer';
+await until(`!!document.querySelector('${drawer} input[aria-label="交接目标"]')`, 'handoff drawer');
+await type(`${drawer} input[aria-label="交接目标"]`, '修好登录后的跳转');
+await type(`${drawer} textarea[aria-label="接手方先做什么"]`, '先复现问题，再改代码');
+await type(`${drawer} textarea[aria-label="已确认的事实"]`, '问题出在回调里');
+await type(`${drawer} textarea[aria-label="尚未验证的假设"]`, '其他守卫可能同样有问题');
+await ev(
+  `[...document.querySelectorAll('${drawer} button')].find(b => b.innerText.trim() === '停止原 Agent 并准备交接').click()`,
+);
+await until(`document.body.innerText.includes('确认交接')`, 'package review');
+check(
+  '准备交接后展示冻结的上下文包（要求/事实/假设分开）',
+  await ev(
+    `document.body.innerText.includes('问题出在回调里') && document.body.innerText.includes('其他守卫可能同样有问题') && document.body.innerText.includes('整理 notes')`,
+  ),
+);
+await shot(`${process.env.NEXUS_E2E_DIR}/handoff-review.png`);
+// Cancel: back out of the review (discards the frozen package), then close.
+await ev(
+  `[...document.querySelectorAll('${drawer} button')].find(b => b.innerText.trim() === '返回修改').click()`,
+);
+await until(`!!document.querySelector('${drawer} input[aria-label="交接目标"]')`, 'back to form');
+await ev(
+  `[...document.querySelectorAll('${drawer} button')].find(b => b.innerText.trim() === '取消').click()`,
+);
+await until(`document.body.innerText.includes('未完成')`, 'handoff aborted');
+check(
+  '取消交接 → 卡片标注“未完成”，负责人不变',
+  await ev(
+    `document.body.innerText.includes('未完成') && document.body.innerText.includes('用户取消了交接') && document.body.innerText.includes('发给')`,
+  ),
+);
+// The hold is released: the composer accepts a prompt again.
+await until(
+  `!document.querySelector('.arco-modal-wrapper:not([style*="display: none"])')`,
+  'drawer gone',
+);
+await type('textarea[aria-label="消息"]', '交接取消后继续');
+await click('text=发送');
+// The demo script asks for permission before finishing, like any real run.
+await until(`document.body.innerText.includes('Fake 请求权限')`, 'released run permission', 15000);
+await click('text=允许');
+await until(`document.body.innerText.includes('已完成：交接取消后继续')`, 'released', 15000);
+check('取消交接后消息可以继续发送', true);
 
 // Draft persists
 await type('textarea', '未发送的草稿');

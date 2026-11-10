@@ -48,6 +48,55 @@ export async function findRepoRoot(run: GitRun, cwd: string): Promise<string | n
   return root || null;
 }
 
+/** Longest diff kept in a handoff package; larger ones are truncated and flagged. */
+const MAX_DIFF_CHARS = 12_000;
+
+const SECRET_FILE = /(^|\/)(\.env($|\.)|.*\.(pem|key|p12|pfx)$)/;
+
+/**
+ * Working-state snapshot for a handoff (ADR 0011). The receiver works in the
+ * same directory, so this is a record of what it inherits — not a patch to
+ * re-apply — and it is captured *before* ownership changes.
+ */
+export async function captureWorkspace(
+  run: GitRun,
+  cwd: string,
+): Promise<{
+  workspace: {
+    root: string;
+    baseCommit: string | null;
+    dirtyDiff: string | null;
+    untrackedFiles: string[];
+  };
+  truncatedDiff: boolean;
+  secretFiles: string[];
+}> {
+  const head = await run(['rev-parse', 'HEAD'], cwd);
+  const baseCommit = head.code === 0 ? head.stdout.trim() || null : null;
+  const status = await run(['status', '--porcelain', '-z'], cwd);
+  // -z entries are "XY path\0" (renames add a second NUL-separated path).
+  const untracked: string[] = [];
+  if (status.code === 0) {
+    for (const entry of status.stdout.split('\0')) {
+      if (entry.startsWith('?? ')) untracked.push(entry.slice(3));
+    }
+  }
+  const diff = await run(['diff', 'HEAD'], cwd);
+  const dirty = diff.code === 0 ? diff.stdout : '';
+  const truncatedDiff = dirty.length > MAX_DIFF_CHARS;
+  const secretFiles = untracked.filter((file) => SECRET_FILE.test(file));
+  return {
+    workspace: {
+      root: cwd,
+      baseCommit,
+      dirtyDiff: dirty.trim() ? dirty.slice(0, MAX_DIFF_CHARS) : null,
+      untrackedFiles: untracked.filter((file) => !SECRET_FILE.test(file)),
+    },
+    truncatedDiff,
+    secretFiles,
+  };
+}
+
 export type WorktreeManager = {
   /** Creates `<worktreeRoot>/<id>` as a detached worktree of cwd's repo and
    * returns the directory the conversation should actually run in (keeps the

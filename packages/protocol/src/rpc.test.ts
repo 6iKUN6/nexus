@@ -25,6 +25,9 @@ const okHandlers: RpcHandlers = {
   'task.list': unused,
   'task.inbox': unused,
   'task.respond': unused,
+  'handoff.prepare': unused,
+  'handoff.commit': unused,
+  'handoff.cancel': unused,
   'system.ping': () => ({ coreVersion: '0.0.0-test', uptimeMs: 5 }),
   'harness.list': ({ refresh }) => ({
     harnesses: refresh

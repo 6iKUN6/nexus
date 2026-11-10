@@ -1,6 +1,7 @@
 import type {
   Conversation,
   ConversationEvent,
+  Handoff,
   HarnessId,
   HarnessInfo,
   RpcClient,
@@ -151,6 +152,34 @@ export class CoreStore {
       action,
       ...(feedback === undefined ? {} : { feedback }),
     });
+  }
+
+  /**
+   * M4 handoff. `prepare` stops the source agent, so the UI asks for
+   * confirmation before calling it, and shows the frozen package before the
+   * owner changes (`commit`).
+   */
+  async prepareHandoff(input: {
+    conversationId: string;
+    toHarnessId: HarnessId;
+    goal: string;
+    nextAction: string;
+    facts: string[];
+    assumptions: string[];
+  }): Promise<Handoff> {
+    const { handoff } = await this.rpc().request('handoff.prepare', input);
+    return handoff;
+  }
+
+  async commitHandoff(handoffId: string, version: number) {
+    const result = await this.rpc().request('handoff.commit', { handoffId, version });
+    this.upsert(result.conversation);
+    return result;
+  }
+
+  async cancelHandoff(handoffId: string) {
+    const { handoff } = await this.rpc().request('handoff.cancel', { handoffId });
+    return handoff;
   }
 
   listTasks(conversationId: string) {

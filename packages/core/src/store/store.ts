@@ -3,6 +3,7 @@ import {
   type ConversationEvent,
   type ConversationEventBody,
   conversationEventBodySchema,
+  type Handoff,
   type Task,
   type TaskStatus,
 } from '@nexus/protocol';
@@ -15,6 +16,8 @@ import {
   type ConversationRow,
   conversations,
   events,
+  type HandoffRow,
+  handoffs,
   type TaskRow,
   tasks,
 } from './schema';
@@ -32,7 +35,10 @@ import {
  */
 
 export type ConversationPatch = Partial<
-  Pick<Conversation, 'title' | 'state' | 'preview' | 'externalSessionId'>
+  Pick<
+    Conversation,
+    'title' | 'state' | 'preview' | 'externalSessionId' | 'harnessId' | 'ownerVersion'
+  >
 >;
 
 /** Rows of both tables share the domain shape; this guards column/field drift. */
@@ -43,6 +49,13 @@ function toConversation(row: ConversationRow): Conversation {
 function toTask(row: TaskRow): Task {
   return row;
 }
+
+function toHandoff(row: HandoffRow): Handoff {
+  return row;
+}
+
+/** Thrown when a handoff commit races another change; nothing is written. */
+export class VersionConflict extends Error {}
 
 export class Store {
   private readonly client: Database.Database;
@@ -207,7 +220,142 @@ export class Store {
     return [...byParent].map(([conversationId, status]) => ({ conversationId, status }));
   }
 
+  // --- handoffs (M4, ADR 0011) ---
+
+  insertHandoff(handoff: Handoff): void {
+    this.db.insert(handoffs).values(handoff).run();
+  }
+
+  getHandoff(id: string): Handoff | null {
+    const row = this.db.select().from(handoffs).where(eq(handoffs.id, id)).get();
+    return row ? toHandoff(row) : null;
+  }
+
+  /** Newest first; used to show the latest handoff on the conversation. */
+  listHandoffs(conversationId: string): Handoff[] {
+    return this.db
+      .select()
+      .from(handoffs)
+      .where(eq(handoffs.conversationId, conversationId))
+      .orderBy(desc(handoffs.createdAt))
+      .all()
+      .map(toHandoff);
+  }
+
+  /** Handoffs that have not reached a final state (used by boot-time reconciliation). */
+  listOpenHandoffs(): Handoff[] {
+    return this.db
+      .select()
+      .from(handoffs)
+      .where(inArray(handoffs.state, ['stopping_source', 'prepared', 'committed']))
+      .orderBy(asc(handoffs.createdAt))
+      .all()
+      .map(toHandoff);
+  }
+
+  /** Updates a handoff with optimistic concurrency: `expectedVersion` must match. */
+  updateHandoff(
+    id: string,
+    patch: Partial<Pick<Handoff, 'state' | 'problem' | 'package'>>,
+    expectedVersion: number,
+    now: number,
+  ): Handoff {
+    const current = this.getHandoff(id);
+    if (!current) throw new Error(`Unknown handoff ${id}`);
+    const next = nextHandoff(current, patch, expectedVersion, now);
+    this.db
+      .update(handoffs)
+      .set({ ...patch, version: next.version, updatedAt: now })
+      .where(and(eq(handoffs.id, id), eq(handoffs.version, expectedVersion)))
+      .run();
+    return next;
+  }
+
+  /**
+   * Commits a prepared handoff atomically: ownership moves to the receiving
+   * harness, the previous owner's session id is forgotten (it is only
+   * meaningful inside the adapter that created it), and the handoff advances.
+   * Any mismatch — the handoff version, or the owner version the package was
+   * frozen against — aborts with nothing written.
+   */
+  commitHandoff(input: {
+    handoffId: string;
+    expectedHandoffVersion: number;
+    preview: string;
+    now: number;
+  }): { handoff: Handoff; conversation: Conversation } {
+    return this.db.transaction(
+      (tx) => {
+        const handoffRow = tx.select().from(handoffs).where(eq(handoffs.id, input.handoffId)).get();
+        if (!handoffRow) throw new Error(`Unknown handoff ${input.handoffId}`);
+        const handoff = toHandoff(handoffRow);
+        const frozen = handoff.package;
+        if (handoff.state !== 'prepared' || handoff.version !== input.expectedHandoffVersion) {
+          throw new VersionConflict('交接内容已变化，请重新准备');
+        }
+        if (!frozen) throw new Error(`Handoff ${handoff.id} has no package`);
+        const conversationRow = tx
+          .select()
+          .from(conversations)
+          .where(eq(conversations.id, handoff.conversationId))
+          .get();
+        if (!conversationRow) throw new Error(`Unknown conversation ${handoff.conversationId}`);
+        const conversation = toConversation(conversationRow);
+        if (
+          conversation.harnessId !== handoff.fromHarnessId ||
+          conversation.ownerVersion !== frozen.ownerVersion
+        ) {
+          throw new VersionConflict('任务负责人已变化，请重新准备交接');
+        }
+        const ownerVersion = conversation.ownerVersion + 1;
+        tx.update(conversations)
+          .set({
+            harnessId: handoff.toHarnessId,
+            externalSessionId: null,
+            ownerVersion,
+            preview: input.preview,
+            updatedAt: input.now,
+          })
+          .where(eq(conversations.id, conversation.id))
+          .run();
+        const committed = nextHandoff(
+          handoff,
+          { state: 'committed' },
+          input.expectedHandoffVersion,
+          input.now,
+        );
+        tx.update(handoffs)
+          .set({ state: committed.state, version: committed.version, updatedAt: input.now })
+          .where(eq(handoffs.id, handoff.id))
+          .run();
+        return {
+          handoff: committed,
+          conversation: {
+            ...conversation,
+            harnessId: handoff.toHarnessId,
+            externalSessionId: null,
+            ownerVersion,
+            preview: input.preview,
+            updatedAt: input.now,
+          },
+        };
+      },
+      { behavior: 'immediate' },
+    );
+  }
+
   close(): void {
     this.client.close();
   }
+}
+
+/** Applies a handoff patch under optimistic concurrency; throws on a stale version. */
+function nextHandoff(
+  current: Handoff,
+  patch: Partial<Pick<Handoff, 'state' | 'problem' | 'package'>>,
+  expectedVersion: number,
+  now: number,
+): Handoff {
+  if (current.version !== expectedVersion) throw new VersionConflict('交接内容已变化，请重新准备');
+  return { ...current, ...patch, version: current.version + 1, updatedAt: now };
 }

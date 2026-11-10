@@ -34,6 +34,11 @@ export const conversationSchema = z.object({
   baseCwd: z.string().nullable(),
   /** Session id inside the harness; set after the first run. */
   externalSessionId: z.string().nullable(),
+  /**
+   * Incremented whenever the owner (harness) changes, e.g. by a handoff.
+   * Handoff commits compare-and-set against the value the user reviewed.
+   */
+  ownerVersion: z.number().int().positive(),
   state: conversationStateSchema,
   /** Seq of the newest event, 0 when empty. */
   lastSeq: z.number().int().nonnegative(),
@@ -70,6 +75,20 @@ export const coreEventSchema = z.discriminatedUnion('type', [
     taskId: z.string(),
     status: taskStatusSchema,
     summary: z.string().nullable(),
+  }),
+  /**
+   * A handoff reached a final state (M4). `stopping_source`/`prepared` are
+   * transient and never persisted; a blocked handoff is recorded as `aborted`
+   * so the timeline explains why the owner did not change.
+   */
+  z.object({
+    type: z.literal('handoff'),
+    handoffId: z.string(),
+    fromHarnessId: harnessIdSchema,
+    toHarnessId: harnessIdSchema,
+    goal: z.string(),
+    state: z.enum(['committed', 'aborted', 'needs_reconciliation']),
+    problem: z.string().nullable(),
   }),
 ]);
 

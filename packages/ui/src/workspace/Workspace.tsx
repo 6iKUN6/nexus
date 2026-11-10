@@ -1,11 +1,11 @@
 import { Button, Message } from '@arco-design/web-react';
-import type { Conversation, PermissionOption, Task } from '@nexus/protocol';
+import type { Conversation, Handoff, PermissionOption, Task } from '@nexus/protocol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NexusAppIcon } from '../brand/NexusMark';
-import { HandoffPreview } from '../conversation/CollaborationDialogs';
 import { Composer } from '../conversation/Composer';
 import { ConversationHeader } from '../conversation/ConversationHeader';
 import { DelegateDialog, type DelegateInput } from '../conversation/DelegateDialog';
+import { HandoffDialog, type HandoffDraft } from '../conversation/HandoffDialog';
 import {
   type NewConversationInput,
   NewConversationModal,
@@ -211,6 +211,19 @@ export function Workspace({
     Message.success('子任务已创建，正在独立 worktree 中执行');
   };
 
+  const prepareHandoff = async (draft: HandoffDraft): Promise<Handoff> => {
+    if (!active) throw new Error('没有打开的会话');
+    return store.prepareHandoff({ conversationId: active.id, ...draft });
+  };
+  const commitHandoff = async (handoff: Handoff): Promise<void> => {
+    await store.commitHandoff(handoff.id, handoff.version);
+    setCollaboration(null);
+    Message.success('交接完成，任务已交给新 Agent');
+  };
+  const cancelHandoff = async (handoff: Handoff): Promise<void> => {
+    await store.cancelHandoff(handoff.id);
+  };
+
   const harness = active ? snapshot.harnesses?.find((h) => h.id === active.harnessId) : undefined;
   const defaultCwd = active?.cwd ?? conversations[0]?.cwd ?? null;
 
@@ -301,7 +314,15 @@ export function Workspace({
         />
       )}
       {active && collaboration === 'handoff' && (
-        <HandoffPreview visible conversation={active} onClose={() => setCollaboration(null)} />
+        <HandoffDialog
+          visible
+          conversation={active}
+          harnesses={snapshot.harnesses}
+          onClose={() => setCollaboration(null)}
+          onPrepare={prepareHandoff}
+          onCommit={commitHandoff}
+          onCancelHandoff={cancelHandoff}
+        />
       )}
       <NewConversationModal
         visible={creating}
