@@ -11,11 +11,17 @@ pnpm probe codex pi -s tool -s cancel --yes
 pnpm probe all --scenario all --yes            # 全部场景（四个 harness 共 7 个场景）
 pnpm probe selftest -s all --yes               # 验证探针本身：伪 harness，不消耗额度
 pnpm probe:report                              # 汇总最近一次结果，输出 markdown 表格
+pnpm --filter @nexus/probes probe:m2 codex --yes   # M2 侦察：codex app-server 全双工录制（耗额度）
+pnpm --filter @nexus/probes probe:m2 pi --yes      # M2 侦察：pi --mode rpc 全双工录制（耗额度）
 ```
 
-所有结果写入 `probes/output/<harness>/<scenario>/<时间戳>/`（已加入 gitignore）：
+M0 结果写入 `probes/output/<harness>/<scenario>/<时间戳>/`（已加入 gitignore）：
 
 - `turn-N.stdout.jsonl` / `turn-N.stderr.log`：原始输出
+
+M2 侦察（`src/appserver.ts`，独立运行器）录制长连接协议的双向流量（`wire.jsonl`，方向+时间戳）：
+codex 为 initialize → thread/start → turn/start →（审批/中断/续传），pi 为 get_state → prompt →（写文件/abort）。
+脱敏后复制为适配器 fixtures（`packages/adapters/<name>/fixtures/`）。
 - `help.*.txt`：CLI 帮助和版本信息
 - `summary.json`：自动观察项，包括退出码、耗时、首次输出延迟、JSON 行占比、事件类型统计、session id、取消过程、残留进程
 

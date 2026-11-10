@@ -7,6 +7,7 @@
   "scripts": {
     "probe": "node src/cli.ts",
     "report": "node src/report.ts",
-    "typecheck": "tsc -p tsconfig.json"
+    "typecheck": "tsc -p tsconfig.json",
+    "probe:m2": "node src/appserver.ts"
   }
 }
