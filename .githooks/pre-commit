@@ -1,0 +1,6 @@
+#!/bin/sh
+# Fast local gate: format/lint only the staged files. The full `pnpm check`
+# (typecheck + boundaries + tests) runs in pre-push and in CI.
+set -e
+pnpm exec biome check --staged --no-errors-on-unmatched
+git diff --cached --check

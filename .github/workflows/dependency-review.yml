@@ -1,0 +1,21 @@
+name: Dependency review
+
+# Blocks PRs that add a dependency with a known high-severity advisory or an
+# incompatible license. Free on public repositories.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  dependency-review:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/dependency-review-action@v4
+        with:
+          fail-on-severity: high
+          # The project is AGPL-3.0; deny licenses that cannot be combined with it.
+          deny-licenses: "GPL-2.0, GPL-3.0, SSPL-1.0, BUSL-1.1"
