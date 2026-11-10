@@ -1,10 +1,16 @@
 name: PR source
 
-# Same-repository branches can be pushed by anyone with write access, which
-# bypasses the fork review boundary. This check fails such PRs so the ruleset
-# can require it: contributions must come from a fork.
+# Gate for "contributions must come from a fork". There is no native
+# "forks only" branch rule on GitHub, so it is expressed as a required status
+# check. Two details make it trustworthy:
+#
+# 1. `pull_request_target` runs the copy of this file that lives on the base
+#    branch, so a fork cannot edit its own gate. The job never checks out PR
+#    code — it only reads the event payload — which is what makes that safe.
+# 2. The repository owner is exempt: only forks may propose changes, but the
+#    owner still works through branches and PRs in this repository.
 on:
-  pull_request:
+  pull_request_target:
 
 permissions:
   contents: read
@@ -13,8 +19,14 @@ jobs:
   fork-only:
     runs-on: ubuntu-latest
     steps:
-      - name: Require a forked head repository
-        if: github.event.pull_request.head.repo.full_name == github.repository
+      - name: Require a fork (or the owner)
+        env:
+          HEAD_REPO: ${{ github.event.pull_request.head.repo.full_name }}
+          BASE_REPO: ${{ github.repository }}
+          ASSOCIATION: ${{ github.event.pull_request.author_association }}
         run: |
-          echo "::error::请从 fork 提交 PR（head 分支不能位于本仓库）。"
-          exit 1
+          echo "head=$HEAD_REPO base=$BASE_REPO association=$ASSOCIATION"
+          if [ "$HEAD_REPO" = "$BASE_REPO" ] && [ "$ASSOCIATION" != "OWNER" ]; then
+            echo "::error::请从 fork 提交 PR（head 分支不能位于本仓库）。"
+            exit 1
+          fi
