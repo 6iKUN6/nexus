@@ -56,4 +56,4 @@ renderer ──MessagePort (JSON-RPC)──▶ core (utilityProcess) ──spawn
 
 ## License
 
-[MIT](LICENSE)
+[AGPL-3.0-only](LICENSE)：你可以自由使用、修改、分发，但**分发修改版或把它作为网络服务提供时必须公开源**。想在不满足 AGPL 条款的情况下使用（例如闭源集成、商业白标），请先联系我谈商业许可。
