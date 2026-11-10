@@ -5,7 +5,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PERSONAS, type TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
 import { MessageText } from './MessageText';
-import { FailureCard, PermissionCard, ToolCard } from './TimelineCards';
+import { FailureCard, PermissionCard, ThinkingCard, ToolCard } from './TimelineCards';
 
 type TimelineProps = {
   conversationId: string;
@@ -186,6 +186,7 @@ function TimelineRow({
     default:
       return (
         <div className="ml-[42px]">
+          {item.kind === 'thinking' && <ThinkingCard item={item} />}
           {item.kind === 'tool' && <ToolCard item={item} />}
           {item.kind === 'permission' && (
             <PermissionCard

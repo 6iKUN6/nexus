@@ -6,11 +6,12 @@ import {
   IconDown,
   IconExclamationCircle,
   IconLock,
+  IconMindMapping,
   IconQuestionCircle,
   IconRight,
 } from '@arco-design/web-react/icon';
 import type { HarnessId, PermissionOption } from '@nexus/protocol';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { failureTitle } from '../model/buildTimeline';
 import { PERSONAS, type TimelineItem } from '../model/types';
 
@@ -43,6 +44,7 @@ const TOOL_STATUS: Record<Of<'tool'>['status'], { icon: React.ReactNode; label: 
 export function ToolCard({ item }: { item: Of<'tool'> }) {
   const [open, setOpen] = useState(false);
   const status = TOOL_STATUS[item.status];
+  const expandable = Boolean(item.output) || item.children.length > 0;
   return (
     <div className="rounded-md bg-tint-1">
       <Button
@@ -50,7 +52,7 @@ export function ToolCard({ item }: { item: Of<'tool'> }) {
         type="text"
         size="small"
         aria-expanded={open}
-        disabled={!item.output}
+        disabled={!expandable}
         onClick={() => setOpen(!open)}
         className="flex h-auto items-center gap-2 px-2.5 py-1.5 text-left text-fg-2"
       >
@@ -62,12 +64,55 @@ export function ToolCard({ item }: { item: Of<'tool'> }) {
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-3">
           {item.detail}
         </span>
-        {item.output && (open ? <IconDown /> : <IconRight />)}
+        {expandable && (open ? <IconDown /> : <IconRight />)}
       </Button>
       {open && item.output && (
         <pre className="nx-selectable m-0 overflow-x-auto border-t border-line-1 px-3 py-2 font-mono text-[11px] leading-relaxed whitespace-pre-wrap text-fg-2">
           {item.output}
         </pre>
+      )}
+      {open && item.children.length > 0 && (
+        <div className="flex flex-col gap-1 border-t border-line-1 px-2 py-1.5">
+          <div className="px-1 text-[10px] text-fg-4">子代理执行过程</div>
+          <div className="ml-2 flex flex-col gap-1 border-l-2 border-line-1 pl-2">
+            {item.children.map((child) => (
+              <ToolCard key={child.id} item={child} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Live thinking stream, CLI-style: visible while streaming, collapses afterwards. */
+export function ThinkingCard({ item }: { item: Of<'thinking'> }) {
+  const [open, setOpen] = useState(item.streaming);
+  useEffect(() => {
+    if (!item.streaming) setOpen(false);
+  }, [item.streaming]);
+  return (
+    <div className="rounded-md">
+      <Button
+        long
+        type="text"
+        size="small"
+        aria-expanded={open}
+        onClick={() => setOpen(!open)}
+        className="flex h-auto items-center gap-2 px-2.5 py-1 text-left"
+      >
+        <span className={item.streaming ? 'nx-pulse text-fg-3' : 'text-fg-4'}>
+          <IconMindMapping />
+        </span>
+        <span className="text-[11px] text-fg-3 italic">
+          {item.streaming ? '思考中…' : '思考过程'}
+        </span>
+        {open ? <IconDown className="text-fg-4" /> : <IconRight className="text-fg-4" />}
+      </Button>
+      {open && (
+        <div className="nx-selectable border-l-2 border-line-1 px-3 py-1 text-xs leading-relaxed whitespace-pre-wrap text-fg-3 italic">
+          {item.text}
+        </div>
       )}
     </div>
   );

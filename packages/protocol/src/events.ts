@@ -21,11 +21,20 @@ export const agentEventSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('run.started'), ...runRef }),
   z.object({ type: z.literal('text.delta'), ...runRef, text: z.string() }),
   z.object({
+    type: z.literal('thinking.delta'),
+    ...runRef,
+    text: z.string(),
+    /** Set when the thinking belongs to a sub-agent (Task tool); not rendered yet. */
+    parentToolCallId: z.string().nullable().optional(),
+  }),
+  z.object({
     type: z.literal('tool.started'),
     ...runRef,
     toolCallId: z.string(),
     name: z.string(),
     input: z.unknown(),
+    /** Set when the call happens inside a sub-agent (Task tool), for nested traces. */
+    parentToolCallId: z.string().nullable().optional(),
   }),
   z.object({
     type: z.literal('tool.completed'),
@@ -56,7 +65,13 @@ export const agentEventSchema = z.discriminatedUnion('type', [
     /** True when the adapter has no exact tokenizer and the numbers are estimates. */
     estimated: z.boolean(),
   }),
-  z.object({ type: z.literal('run.completed'), ...runRef, stopReason: stopReasonSchema }),
+  z.object({
+    type: z.literal('run.completed'),
+    ...runRef,
+    stopReason: stopReasonSchema,
+    /** Wall-clock time the harness reported for the run, when available. */
+    durationMs: z.number().nonnegative().nullable().optional(),
+  }),
   z.object({
     type: z.literal('run.failed'),
     ...runRef,

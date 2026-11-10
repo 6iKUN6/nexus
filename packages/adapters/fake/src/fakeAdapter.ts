@@ -13,9 +13,25 @@ import type {
  * that block until answered, failures and cancellation.
  */
 
+export type FakeToolChild = {
+  name: string;
+  input?: unknown;
+  status?: 'ok' | 'error';
+  summary?: string;
+};
+
 export type FakeStep =
   | { kind: 'text'; text: string }
-  | { kind: 'tool'; name: string; input?: unknown; status?: 'ok' | 'error'; summary?: string }
+  | { kind: 'thinking'; text: string }
+  | {
+      kind: 'tool';
+      name: string;
+      input?: unknown;
+      status?: 'ok' | 'error';
+      summary?: string;
+      /** Nested calls, like a Task tool's sub-agent trace. */
+      children?: FakeToolChild[];
+    }
   | { kind: 'permission'; description: string }
   | { kind: 'fail'; code: string; message: string };
 
@@ -118,6 +134,9 @@ function createFakeSession(
         case 'text':
           yield { type: 'text.delta', runId, text: step.text };
           break;
+        case 'thinking':
+          yield { type: 'thinking.delta', runId, text: step.text };
+          break;
         case 'tool': {
           const toolCallId = `${runId}-tool-${toolIndex++}`;
           yield {
@@ -127,6 +146,26 @@ function createFakeSession(
             name: step.name,
             input: step.input ?? null,
           };
+          for (const child of step.children ?? []) {
+            await sleep(stepDelayMs, signal);
+            if (signal.aborted) break;
+            const childId = `${runId}-tool-${toolIndex++}`;
+            yield {
+              type: 'tool.started',
+              runId,
+              toolCallId: childId,
+              name: child.name,
+              input: child.input ?? null,
+              parentToolCallId: toolCallId,
+            };
+            yield {
+              type: 'tool.completed',
+              runId,
+              toolCallId: childId,
+              status: child.status ?? 'ok',
+              summary: child.summary ?? null,
+            };
+          }
           yield {
             type: 'tool.completed',
             runId,

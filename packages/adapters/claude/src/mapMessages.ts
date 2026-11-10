@@ -30,8 +30,10 @@ export function createMapperState(runId: string): MapperState {
 const isObject = (value: unknown): value is Json =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
 
-const MAX_SUMMARY = 240;
-const MAX_INPUT = 600;
+// Generous enough for a readable trace (full commands, diffs, tool output);
+// the UI collapses long payloads instead of the adapter dropping them.
+const MAX_SUMMARY = 2000;
+const MAX_INPUT = 2000;
 
 function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max)}…` : text;
@@ -79,15 +81,25 @@ function mapStopReason(reason: unknown): StopReason {
 export function mapSdkMessage(message: unknown, state: MapperState): AgentEvent[] {
   if (!isObject(message) || state.terminal) return [];
   const { runId } = state;
-  // Sub-agent traffic (parent_tool_use_id set) is not shown in the main timeline yet.
-  if (typeof message.parent_tool_use_id === 'string') return [];
+  // Sub-agent (Task) traffic carries parent_tool_use_id: tool calls are kept
+  // and nested under the parent call, sub-agent text stays out of the main
+  // timeline (the Task result carries its summary), like the CLI does.
+  const parent = typeof message.parent_tool_use_id === 'string' ? message.parent_tool_use_id : null;
 
   switch (message.type) {
     case 'stream_event': {
       const event = message.event;
       if (!isObject(event) || event.type !== 'content_block_delta') return [];
       const delta = event.delta;
-      if (isObject(delta) && delta.type === 'text_delta' && typeof delta.text === 'string') {
+      if (!isObject(delta)) return [];
+      if (delta.type === 'thinking_delta' && typeof delta.thinking === 'string') {
+        return delta.thinking
+          ? [{ type: 'thinking.delta', runId, text: delta.thinking, parentToolCallId: parent }]
+          : [];
+      }
+      // Sub-agent prose is not inlined in the main timeline.
+      if (parent !== null) return [];
+      if (delta.type === 'text_delta' && typeof delta.text === 'string') {
         return delta.text ? [{ type: 'text.delta', runId, text: delta.text }] : [];
       }
       return [];
@@ -110,6 +122,7 @@ export function mapSdkMessage(message: unknown, state: MapperState): AgentEvent[
           toolCallId,
           name,
           input: summarizeToolInput(block.input),
+          parentToolCallId: parent,
         });
       }
       return events;
@@ -155,6 +168,7 @@ export function mapSdkMessage(message: unknown, state: MapperState): AgentEvent[
           type: 'run.completed',
           runId,
           stopReason: mapStopReason(message.stop_reason),
+          durationMs: typeof message.duration_ms === 'number' ? message.duration_ms : null,
         });
         return events;
       }

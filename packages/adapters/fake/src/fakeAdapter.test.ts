@@ -42,6 +42,24 @@ describe('fake adapter', () => {
     expect(types).toEqual(['run.started', 'tool.started', 'tool.completed', 'run.completed']);
   });
 
+  it('emits thinking deltas and nests scripted child tools under their parent', async () => {
+    const s = await session([
+      { kind: 'thinking', text: '想一下' },
+      {
+        kind: 'tool',
+        name: 'Task',
+        input: { description: '子任务' },
+        summary: '完成',
+        children: [{ name: 'Glob', input: { pattern: '*.ts' }, summary: '2 个文件' }],
+      },
+    ]);
+    const events = await collect(s.sendPrompt({ runId: 'r1', text: '' }));
+    for (const event of events) expect(agentEventSchema.parse(event)).toEqual(event);
+    expect(events[1]).toEqual({ type: 'thinking.delta', runId: 'r1', text: '想一下' });
+    const child = events.find((e) => e.type === 'tool.started' && e.name === 'Glob');
+    expect(child).toMatchObject({ parentToolCallId: 'r1-tool-0' });
+  });
+
   it('blocks on a permission request until it is answered', async () => {
     const s = await session([
       { kind: 'permission', description: '写入 a.txt' },

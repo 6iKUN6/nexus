@@ -20,18 +20,31 @@ export const PERSONAS: Record<HarnessId, Persona> = {
   fake: { name: 'Fake', monogram: 'F', tone: 'bg-sys-gray' },
 };
 
+export type ToolItem = {
+  kind: 'tool';
+  id: string;
+  runId: string;
+  name: string;
+  detail: string;
+  status: 'running' | 'ok' | 'error' | 'unknown';
+  output: string | null;
+  /** Set for calls made inside a sub-agent (Task); the item nests under its parent. */
+  parentToolCallId: string | null;
+  children: ToolItem[];
+};
+
 export type TimelineItem =
   | { kind: 'user'; id: string; at: number; text: string; queued: boolean }
   | { kind: 'agent'; id: string; at: number; runId: string; text: string; streaming: boolean }
   | {
-      kind: 'tool';
+      kind: 'thinking';
       id: string;
+      at: number;
       runId: string;
-      name: string;
-      detail: string;
-      status: 'running' | 'ok' | 'error' | 'unknown';
-      output: string | null;
+      text: string;
+      streaming: boolean;
     }
+  | ToolItem
   | {
       kind: 'permission';
       id: string;
@@ -52,4 +65,6 @@ export type RunSummary = {
   outcome: 'running' | 'completed' | 'cancelled' | 'failed' | 'queued';
   inputTokens: number | null;
   outputTokens: number | null;
+  /** Wall-clock duration reported by the harness, when available. */
+  durationMs: number | null;
 };

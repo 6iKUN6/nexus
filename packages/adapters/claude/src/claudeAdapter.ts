@@ -60,7 +60,7 @@ export function createClaudeAdapter(options: ClaudeAdapterOptions = {}): AgentAd
           mcp: true,
           usage: true,
         },
-        limitations: ['子代理（Task 工具）的过程暂不显示在时间线中。'],
+        limitations: ['子代理（Task 工具）内部只显示工具调用，其正文不并入主时间线。'],
       };
     },
     async createSession(sessionOptions) {

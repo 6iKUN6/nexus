@@ -16,8 +16,19 @@ if (!dataDir) throw new Error('NEXUS_DATA_DIR is not set');
 
 /** Development harness: exercises streaming, tools and permissions without spending quota. */
 const demoScript = (prompt: string): FakeStep[] => [
+  { kind: 'thinking', text: '先搜一下相关代码，再让子代理看入口文件，最后写入笔记。' },
   { kind: 'text', text: '好的，我先看一下项目结构。' },
   { kind: 'tool', name: 'Grep', input: { pattern: prompt.slice(0, 20) }, summary: '找到 3 处匹配' },
+  {
+    kind: 'tool',
+    name: 'Task',
+    input: { description: '探索项目入口' },
+    summary: '子代理完成：入口在 src/main.ts',
+    children: [
+      { name: 'Glob', input: { pattern: 'src/**/*.ts' }, summary: '12 个文件' },
+      { name: 'Read', input: { file_path: 'src/main.ts' }, summary: '读取 80 行' },
+    ],
+  },
   { kind: 'permission', description: '写入 notes.md' },
   { kind: 'text', text: `\n\n已完成：${prompt}` },
 ];

@@ -124,7 +124,11 @@ export function DetailPanel({
                 <span className={OUTCOME[run.outcome].className}>{OUTCOME[run.outcome].text}</span>
                 {run.endedAt && run.startedAt && (
                   <span className="ml-auto text-fg-3">
-                    {Math.max(1, Math.round((run.endedAt - run.startedAt) / 1000))}s
+                    {Math.max(
+                      1,
+                      Math.round((run.durationMs ?? run.endedAt - run.startedAt) / 1000),
+                    )}
+                    s
                   </span>
                 )}
               </li>

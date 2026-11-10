@@ -43,6 +43,82 @@ describe('buildTimeline', () => {
     expect(runs[0]?.outcome).toBe('running');
   });
 
+  it('accumulates thinking into its own trace item, closed by the next text or tool', () => {
+    const { items } = buildTimeline(
+      log(
+        { type: 'run.started', runId: 'r1' },
+        { type: 'thinking.delta', runId: 'r1', text: '先想' },
+        { type: 'thinking.delta', runId: 'r1', text: '一下' },
+        { type: 'text.delta', runId: 'r1', text: '结论' },
+        { type: 'run.completed', runId: 'r1', stopReason: 'end_turn' },
+      ),
+    );
+    expect(items.map((i) => i.kind)).toEqual(['thinking', 'agent']);
+    expect(items[0]).toMatchObject({ text: '先想一下', streaming: false });
+  });
+
+  it('keeps sub-agent thinking out of the timeline', () => {
+    const { items } = buildTimeline(
+      log(
+        { type: 'run.started', runId: 'r1' },
+        { type: 'thinking.delta', runId: 'r1', text: 'nested', parentToolCallId: 't1' },
+      ),
+    );
+    expect(items).toHaveLength(0);
+  });
+
+  it('nests sub-agent tools under their Task card and falls back when the parent is missing', () => {
+    const { items } = buildTimeline(
+      log(
+        { type: 'run.started', runId: 'r1' },
+        {
+          type: 'tool.started',
+          runId: 'r1',
+          toolCallId: 't1',
+          name: 'Task',
+          input: { description: '探索' },
+        },
+        {
+          type: 'tool.started',
+          runId: 'r1',
+          toolCallId: 't2',
+          name: 'Grep',
+          input: { pattern: 'x' },
+          parentToolCallId: 't1',
+        },
+        { type: 'tool.completed', runId: 'r1', toolCallId: 't2', status: 'ok', summary: '3 处' },
+        { type: 'tool.completed', runId: 'r1', toolCallId: 't1', status: 'ok', summary: '完成' },
+        {
+          type: 'tool.started',
+          runId: 'r1',
+          toolCallId: 't3',
+          name: 'Read',
+          input: { file_path: 'a.ts' },
+          parentToolCallId: 'missing',
+        },
+        { type: 'run.completed', runId: 'r1', stopReason: 'end_turn', durationMs: 4200 },
+      ),
+    );
+    expect(items.map((i) => i.kind)).toEqual(['tool', 'tool']);
+    const task = items[0];
+    expect(task).toMatchObject({ name: 'Task', status: 'ok' });
+    if (task?.kind !== 'tool') throw new Error('expected tool');
+    expect(task.children).toHaveLength(1);
+    expect(task.children[0]).toMatchObject({ name: 'Grep', status: 'ok', output: '3 处' });
+    // Orphaned child renders top-level rather than disappearing.
+    expect(items[1]).toMatchObject({ name: 'Read', status: 'unknown' });
+  });
+
+  it('records the harness-reported run duration', () => {
+    const { runs } = buildTimeline(
+      log(
+        { type: 'run.started', runId: 'r1' },
+        { type: 'run.completed', runId: 'r1', stopReason: 'end_turn', durationMs: 4200 },
+      ),
+    );
+    expect(runs[0]).toMatchObject({ outcome: 'completed', durationMs: 4200 });
+  });
+
   it('tracks permission resolution and expires unanswered prompts when the run ends', () => {
     const request = (requestId: string): ConversationEventBody => ({
       type: 'permission.requested',

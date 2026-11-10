@@ -8,6 +8,9 @@ import type { RunSummary, TimelineItem } from './types';
  *
  * - Consecutive text deltas of a run form one agent bubble; a tool call or
  *   permission prompt closes the bubble, later text starts a new one.
+ * - Thinking deltas form a separate collapsible trace item between bubbles.
+ * - Sub-agent tool calls nest under their parent Task card; sub-agent prose
+ *   and thinking are dropped (the Task result carries the summary).
  * - A tool without a completion when its run ended is `unknown`, never `ok`.
  * - A permission prompt whose run ended unanswered is `expired`.
  */
@@ -18,6 +21,7 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
   const items: TimelineItem[] = [];
   const runs = new Map<string, RunSummary>();
   const openText = new Map<string, Extract<TimelineItem, { kind: 'agent' }>>();
+  const openThinking = new Map<string, Extract<TimelineItem, { kind: 'thinking' }>>();
   const tools = new Map<string, Extract<TimelineItem, { kind: 'tool' }>>();
   const permissions = new Map<string, Extract<TimelineItem, { kind: 'permission' }>>();
   const userByMessage = new Map<string, Extract<TimelineItem, { kind: 'user' }>>();
@@ -33,10 +37,18 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
         outcome: 'queued',
         inputTokens: null,
         outputTokens: null,
+        durationMs: null,
       };
       runs.set(runId, summary);
     }
     return summary;
+  };
+
+  /** A thinking segment ends when the run moves on to text, a tool or a prompt. */
+  const closeThinking = (runId: string) => {
+    const thinking = openThinking.get(runId);
+    if (thinking) thinking.streaming = false;
+    openThinking.delete(runId);
   };
 
   const endRun = (runId: string, at: number, outcome: RunSummary['outcome']) => {
@@ -46,6 +58,7 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
     const text = openText.get(runId);
     if (text) text.streaming = false;
     openText.delete(runId);
+    closeThinking(runId);
     for (const tool of tools.values()) {
       if (tool.runId === runId && tool.status === 'running') tool.status = 'unknown';
     }
@@ -82,6 +95,7 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
         break;
       }
       case 'text.delta': {
+        closeThinking(body.runId);
         const current = openText.get(body.runId);
         if (current) {
           current.text += body.text;
@@ -99,10 +113,35 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
         }
         break;
       }
+      case 'thinking.delta': {
+        // Sub-agent thinking stays out of the timeline for now.
+        if (body.parentToolCallId) break;
+        const current = openThinking.get(body.runId);
+        if (current) {
+          current.text += body.text;
+        } else {
+          const text = openText.get(body.runId);
+          if (text) text.streaming = false;
+          openText.delete(body.runId);
+          const item = {
+            kind: 'thinking' as const,
+            id,
+            at,
+            runId: body.runId,
+            text: body.text,
+            streaming: true,
+          };
+          openThinking.set(body.runId, item);
+          items.push(item);
+        }
+        break;
+      }
       case 'tool.started': {
         const text = openText.get(body.runId);
         if (text) text.streaming = false;
         openText.delete(body.runId);
+        closeThinking(body.runId);
+        const parentId = body.parentToolCallId ?? null;
         const item = {
           kind: 'tool' as const,
           id,
@@ -111,9 +150,15 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
           detail: describeInput(body.input),
           status: 'running' as const,
           output: null,
+          parentToolCallId: parentId,
+          children: [],
         };
         tools.set(body.toolCallId, item);
-        items.push(item);
+        // Sub-agent calls nest under their Task card; if the parent never made
+        // it into the log (gap refill, crash), fall back to a top-level card.
+        const parent = parentId ? tools.get(parentId) : undefined;
+        if (parent) parent.children.push(item);
+        else items.push(item);
         break;
       }
       case 'tool.completed': {
@@ -128,6 +173,7 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
         const text = openText.get(body.runId);
         if (text) text.streaming = false;
         openText.delete(body.runId);
+        closeThinking(body.runId);
         const item = {
           kind: 'permission' as const,
           id,
@@ -164,6 +210,7 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
         break;
       }
       case 'run.completed':
+        run(body.runId).durationMs = body.durationMs ?? null;
         endRun(body.runId, at, body.stopReason === 'cancelled' ? 'cancelled' : 'completed');
         if (body.stopReason === 'cancelled')
           items.push({ kind: 'system', id, text: '你停止了这次运行' });

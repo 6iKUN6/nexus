@@ -86,11 +86,83 @@ describe('mapSdkMessage (edge cases)', () => {
     expect(mapSdkMessage(delta('late', null), state)).toEqual([]);
   });
 
+  it('maps thinking deltas, tagging sub-agent thinking with its parent call', () => {
+    const state = createMapperState('r1');
+    const delta = (text: string, parent: string | null) => ({
+      type: 'stream_event',
+      parent_tool_use_id: parent,
+      event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: text } },
+    });
+    expect(mapSdkMessage(delta('想想', null), state)).toEqual([
+      { type: 'thinking.delta', runId: 'r1', text: '想想', parentToolCallId: null },
+    ]);
+    expect(mapSdkMessage(delta('子代理想', 'toolu_9'), state)).toEqual([
+      { type: 'thinking.delta', runId: 'r1', text: '子代理想', parentToolCallId: 'toolu_9' },
+    ]);
+  });
+
+  it('nests sub-agent tool calls under their parent and still pairs their results', () => {
+    const state = createMapperState('r1');
+    const started = mapSdkMessage(
+      {
+        type: 'assistant',
+        parent_tool_use_id: 'toolu_parent',
+        message: {
+          content: [{ type: 'tool_use', id: 'toolu_child', name: 'Grep', input: { pattern: 'x' } }],
+        },
+      },
+      state,
+    );
+    expect(started).toEqual([
+      {
+        type: 'tool.started',
+        runId: 'r1',
+        toolCallId: 'toolu_child',
+        name: 'Grep',
+        input: { pattern: 'x' },
+        parentToolCallId: 'toolu_parent',
+      },
+    ]);
+    const completed = mapSdkMessage(
+      {
+        type: 'user',
+        parent_tool_use_id: 'toolu_parent',
+        message: {
+          content: [{ type: 'tool_result', tool_use_id: 'toolu_child', content: '3 matches' }],
+        },
+      },
+      state,
+    );
+    expect(completed).toEqual([
+      {
+        type: 'tool.completed',
+        runId: 'r1',
+        toolCallId: 'toolu_child',
+        status: 'ok',
+        summary: '3 matches',
+      },
+    ]);
+  });
+
+  it('carries the reported duration on run.completed', () => {
+    const state = createMapperState('r1');
+    const events = mapSdkMessage(
+      { type: 'result', subtype: 'success', duration_ms: 12345, usage: {} },
+      state,
+    );
+    expect(events).toContainEqual({
+      type: 'run.completed',
+      runId: 'r1',
+      stopReason: 'other',
+      durationMs: 12345,
+    });
+  });
+
   it('summarizes tool input to the fields a human needs', () => {
     expect(summarizeToolInput({ file_path: '/a.ts', content: 'x'.repeat(5000) })).toEqual({
       file_path: '/a.ts',
     });
     const big = summarizeToolInput({ blob: 'y'.repeat(5000) }) as { preview: string };
-    expect(big.preview.length).toBeLessThan(700);
+    expect(big.preview.length).toBeLessThan(2100);
   });
 });
