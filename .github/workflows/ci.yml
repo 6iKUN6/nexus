@@ -1,0 +1,33 @@
+name: CI
+
+# `pnpm check` is the single gate documented in AGENTS.md: Biome, tsc,
+# dependency-cruiser boundaries and unit tests. The e2e smoke test is
+# macOS-only and drives a real Electron window, so it stays out of CI.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      # Cache key includes the lockfile; better-sqlite3 ships prebuilds, so no
+      # native toolchain is needed.
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm check

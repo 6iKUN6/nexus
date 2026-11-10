@@ -2,7 +2,7 @@
 
 Rules for every contributor, human or AI. `CLAUDE.md` is a symlink to this file, so Claude Code and Codex read the same instructions.
 
-Nexus is a **local-only** desktop app (macOS first) for managing local agent CLIs ("harnesses": Claude Code, Codex, pi; DeepSeek Harness is deferred) through an IM-style chat UI with tabs. It has no server, no accounts and no cloud sync. The full plan is in `开发落地计划.md`, and the decisions are in `docs/decisions/`. **Read the relevant ADR before changing a module it covers.**
+Nexus is a **local-only** desktop app (macOS first) for managing local agent CLIs ("harnesses": Claude Code, Codex, pi; DeepSeek Harness is deferred) through an IM-style chat UI with tabs. It has no server, no accounts and no cloud sync. The full plan is `docs/initiation/开发落地计划.md` (internal, not distributed), and the decisions are in `docs/decisions/`. **Read the relevant ADR before changing a module it covers.**
 
 ## Commands
 
