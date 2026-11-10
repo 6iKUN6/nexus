@@ -1,0 +1,12 @@
+{
+  "name": "@nexus/probes",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "M0 harness capability probes. Throwaway tooling; not shipped.",
+  "scripts": {
+    "probe": "node src/cli.ts",
+    "report": "node src/report.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  }
+}
