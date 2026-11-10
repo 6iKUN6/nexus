@@ -1,0 +1,23 @@
+version: 2
+# Only npm: pnpm workspace deps live in package.json/lockfile, and GitHub
+# Actions versions are pinned by major tag, which the workflows bump by hand.
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    groups:
+      # One PR for routine bumps, so a week of patches does not flood review.
+      dev-minor-patch:
+        patterns: ["*"]
+        dependency-type: development
+        update-types: [minor, patch]
+    ignore:
+      # Electron majors change the whole shell; upgrade deliberately (ADR 0002).
+      - dependency-name: electron
+        update-types: [version-update:semver-major]
+      - dependency-name: "@anthropic-ai/claude-agent-sdk"
+        update-types: [version-update:semver-major]
+      - dependency-name: better-sqlite3
+        update-types: [version-update:semver-major]
