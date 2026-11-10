@@ -4,6 +4,7 @@ import type { HarnessId, PermissionOption } from '@nexus/protocol';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PERSONAS, type TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
+import { DelegationCard } from './DelegationCard';
 import { MessageText } from './MessageText';
 import { FailureCard, PermissionCard, ThinkingCard, ToolCard } from './TimelineCards';
 
@@ -15,6 +16,8 @@ type TimelineProps = {
   revision: number;
   onPermission: (requestId: string, option: PermissionOption) => void;
   onRetry: (() => void) | null;
+  onOpenConversation: (id: string) => void;
+  onTaskRespond: (taskId: string, action: 'accept' | 'request_changes', feedback?: string) => void;
 };
 
 const time = (at: number) =>
@@ -31,6 +34,8 @@ export function Timeline({
   revision,
   onPermission,
   onRetry,
+  onOpenConversation,
+  onTaskRespond,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
@@ -88,6 +93,8 @@ export function Timeline({
                 agent={agent}
                 onPermission={onPermission}
                 onRetry={item.kind === 'failure' && index === items.length - 1 ? onRetry : null}
+                onOpenConversation={onOpenConversation}
+                onTaskRespond={onTaskRespond}
               />
             ))
           )}
@@ -132,12 +139,16 @@ function TimelineRow({
   agent,
   onPermission,
   onRetry,
+  onOpenConversation,
+  onTaskRespond,
 }: {
   item: TimelineItem;
   previous: TimelineItem | undefined;
   agent: HarnessId;
   onPermission: TimelineProps['onPermission'];
   onRetry: TimelineProps['onRetry'];
+  onOpenConversation: TimelineProps['onOpenConversation'];
+  onTaskRespond: TimelineProps['onTaskRespond'];
 }) {
   switch (item.kind) {
     case 'user':
@@ -196,6 +207,13 @@ function TimelineRow({
             />
           )}
           {item.kind === 'failure' && <FailureCard item={item} onRetry={onRetry} />}
+          {item.kind === 'delegation' && (
+            <DelegationCard
+              item={item}
+              onOpenConversation={onOpenConversation}
+              onRespond={onTaskRespond}
+            />
+          )}
         </div>
       );
   }

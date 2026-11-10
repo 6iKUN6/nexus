@@ -1,4 +1,4 @@
-import { Alert, Drawer, Form, Input, Modal, Radio, Select } from '@arco-design/web-react';
+import { Alert, Drawer } from '@arco-design/web-react';
 import {
   IconCheckCircle,
   IconExclamationCircle,
@@ -9,35 +9,15 @@ import { PERSONAS } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
 
 /**
- * Design previews of delegation (M3) and handoff (M4), kept reachable so the
- * flows can be reviewed in the real app. Nothing here is submitted; contents
- * are illustrative examples, labelled as such.
+ * Design preview of handoff (M4), kept reachable so the flow can be reviewed
+ * in the real app. Nothing here is submitted; contents are illustrative
+ * examples, labelled as such. (Delegation graduated to a real dialog in M3 —
+ * see DelegateDialog.)
  */
 
 const OTHERS: HarnessId[] = ['claude-code', 'codex', 'pi'];
 
-export function CollaborationPreview({
-  kind,
-  conversation,
-  onClose,
-}: {
-  kind: 'delegate' | 'handoff' | null;
-  conversation: Conversation;
-  onClose: () => void;
-}) {
-  return (
-    <>
-      <HandoffPreview conversation={conversation} visible={kind === 'handoff'} onClose={onClose} />
-      <DelegatePreview
-        conversation={conversation}
-        visible={kind === 'delegate'}
-        onClose={onClose}
-      />
-    </>
-  );
-}
-
-function HandoffPreview({
+export function HandoffPreview({
   conversation,
   visible,
   onClose,
@@ -132,50 +112,5 @@ function Omitted({ children, reason }: { children: React.ReactNode; reason: stri
       <span className="flex-1 text-fg-2">{children}</span>
       <span className="shrink-0 text-[11px] text-fg-3">{reason}</span>
     </li>
-  );
-}
-
-function DelegatePreview({
-  conversation,
-  visible,
-  onClose,
-}: {
-  conversation: Conversation;
-  visible: boolean;
-  onClose: () => void;
-}) {
-  return (
-    <Modal
-      title="委派子任务"
-      visible={visible}
-      footer={null}
-      onCancel={onClose}
-      style={{ width: 520 }}
-    >
-      <Alert className="mb-4" type="info" content="功能预览：委派将在 M3 开放，当前无法提交。" />
-      <Form layout="vertical" size="small" disabled>
-        <Form.Item label="子任务目标" required>
-          <Input placeholder="例如：为 returnTo 校验补充单元测试" />
-        </Form.Item>
-        <Form.Item label="验收标准">
-          <Input.TextArea placeholder="每行一条" autoSize={{ minRows: 2, maxRows: 4 }} />
-        </Form.Item>
-        <Form.Item label="执行者">
-          <Select
-            placeholder="选择执行者"
-            options={OTHERS.filter((h) => h !== conversation.harnessId).map((h) => ({
-              label: PERSONAS[h].name,
-              value: h,
-            }))}
-          />
-        </Form.Item>
-        <Form.Item label="工作区">
-          <Radio.Group type="button" defaultValue="readonly">
-            <Radio value="readonly">共享 · 只读</Radio>
-            <Radio value="worktree">新建 worktree · 可写</Radio>
-          </Radio.Group>
-        </Form.Item>
-      </Form>
-    </Modal>
   );
 }

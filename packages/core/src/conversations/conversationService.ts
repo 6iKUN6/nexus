@@ -75,6 +75,32 @@ export class ConversationService {
     return this.deps.store.listConversations();
   }
 
+  get(conversationId: string): Conversation {
+    return this.require(conversationId);
+  }
+
+  /**
+   * Records a task lifecycle event on a conversation's log (M3). TaskService
+   * drives this; task events never change the conversation's run state.
+   */
+  recordTaskEvent(
+    conversationId: string,
+    body: Extract<ConversationEventBody, { type: 'task.delegated' | 'task.updated' }>,
+  ): void {
+    this.require(conversationId);
+    const preview =
+      body.type === 'task.delegated'
+        ? truncate(`委派子任务：${body.goal}`)
+        : body.status === 'review'
+          ? '子任务完成，待验收'
+          : body.status === 'failed'
+            ? '子任务失败'
+            : body.status === 'accepted'
+              ? '子任务已通过验收'
+              : '子任务继续进行中';
+    this.append(conversationId, body, { preview });
+  }
+
   events(conversationId: string, afterSeq: number): ConversationEvent[] {
     this.require(conversationId);
     return this.deps.store.listEvents(conversationId, afterSeq);

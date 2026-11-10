@@ -51,6 +51,10 @@ function setup(history: ConversationEvent[]) {
     'conversation.send': unused,
     'conversation.cancel': unused,
     'permission.respond': unused,
+    'task.delegate': unused,
+    'task.list': unused,
+    'task.inbox': () => ({ items: [] }),
+    'task.respond': unused,
   };
   serveRpc(serverPort, handlers);
   const store = new CoreStore(async () => createRpcClient(clientPort));

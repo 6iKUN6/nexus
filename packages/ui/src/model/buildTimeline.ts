@@ -229,6 +229,33 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
           message: body.error.message,
         });
         break;
+      case 'task.delegated':
+        items.push({
+          kind: 'delegation',
+          id,
+          at,
+          taskId: body.taskId,
+          childConversationId: body.childConversationId,
+          goal: body.goal,
+          acceptance: body.acceptance,
+          harnessId: body.harnessId,
+          status: 'running',
+          summary: null,
+        });
+        break;
+      case 'task.updated': {
+        // Fold the transition into the existing card; a missing card (gap in
+        // the log) is skipped, the task list RPC is the fallback source.
+        const card = items.find(
+          (item): item is Extract<TimelineItem, { kind: 'delegation' }> =>
+            item.kind === 'delegation' && item.taskId === body.taskId,
+        );
+        if (card) {
+          card.status = body.status;
+          card.summary = body.summary ?? card.summary;
+        }
+        break;
+      }
     }
   }
 

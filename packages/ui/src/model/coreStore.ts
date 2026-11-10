@@ -4,6 +4,7 @@ import type {
   HarnessId,
   HarnessInfo,
   RpcClient,
+  TaskStatus,
 } from '@nexus/protocol';
 
 /**
@@ -24,6 +25,8 @@ export type CoreSnapshot = {
   harnesses: HarnessInfo[] | null;
   conversations: Conversation[];
   events: ReadonlyMap<string, readonly ConversationEvent[]>;
+  /** Conversations with delegated tasks awaiting the user (M3 inbox). */
+  taskInbox: ReadonlyArray<{ conversationId: string; status: TaskStatus }>;
 };
 
 type Listener = () => void;
@@ -38,6 +41,7 @@ export class CoreStore {
     harnesses: null,
     conversations: [],
     events: new Map(),
+    taskInbox: [],
   };
   private readonly listeners = new Set<Listener>();
   private client: RpcClient | null = null;
@@ -76,6 +80,7 @@ export class CoreStore {
         conversations: [...conversations].sort(byUpdatedDesc),
       });
       void this.refreshHarnesses(false);
+      void this.refreshTaskInbox().catch(() => {});
     } catch (error) {
       this.set({ status: 'failed', error: error instanceof Error ? error.message : String(error) });
     }
@@ -127,6 +132,37 @@ export class CoreStore {
     return this.rpc().request('permission.respond', { conversationId, requestId, optionId });
   }
 
+  /** M3 delegation. The new child conversation is registered locally at once. */
+  async delegate(input: {
+    conversationId: string;
+    goal: string;
+    acceptance: string | null;
+    harnessId: HarnessId;
+  }) {
+    const result = await this.rpc().request('task.delegate', input);
+    this.upsert(result.childConversation);
+    this.merge(result.childConversation.id, []);
+    return result;
+  }
+
+  respondToTask(taskId: string, action: 'accept' | 'request_changes', feedback?: string) {
+    return this.rpc().request('task.respond', {
+      taskId,
+      action,
+      ...(feedback === undefined ? {} : { feedback }),
+    });
+  }
+
+  listTasks(conversationId: string) {
+    return this.rpc().request('task.list', { conversationId });
+  }
+
+  /** Parent conversations with tasks awaiting review (or failed). */
+  async refreshTaskInbox(): Promise<void> {
+    const { items } = await this.rpc().request('task.inbox', {});
+    this.set({ taskInbox: items });
+  }
+
   // --- internals ---
 
   private rpc(): RpcClient {
@@ -144,6 +180,8 @@ export class CoreStore {
   }
 
   private receive(event: ConversationEvent) {
+    // Task transitions change the inbox; refetch it (cheap, single query).
+    if (event.body.type === 'task.updated') void this.refreshTaskInbox().catch(() => {});
     const known = this.snapshot.events.get(event.conversationId);
     if (!known) return; // not opened yet; loaded in full on open
     const last = known.at(-1)?.seq ?? 0;

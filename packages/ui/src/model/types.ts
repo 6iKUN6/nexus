@@ -1,4 +1,4 @@
-import type { HarnessId, PermissionOption } from '@nexus/protocol';
+import type { HarnessId, PermissionOption, TaskStatus } from '@nexus/protocol';
 
 /**
  * View models: what the screen renders. Derived from core events by
@@ -56,6 +56,19 @@ export type TimelineItem =
       chosen: PermissionOption | null;
     }
   | { kind: 'failure'; id: string; runId: string; code: string; message: string }
+  | {
+      kind: 'delegation';
+      id: string;
+      at: number;
+      taskId: string;
+      childConversationId: string;
+      goal: string;
+      acceptance: string | null;
+      harnessId: HarnessId;
+      status: TaskStatus;
+      /** Latest result summary (review) or the feedback sent back (running). */
+      summary: string | null;
+    }
   | { kind: 'system'; id: string; text: string };
 
 export type RunSummary = {

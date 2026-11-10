@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { mkdtempSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
@@ -16,6 +17,7 @@ import { harnessEnvironment } from './env/harnessEnvironment';
 import { resolveLoginShellPath } from './env/loginShellPath';
 import { detectHarnesses, nodeDetectDeps } from './harness/detect';
 import { Store } from './store/store';
+import { TaskService } from './tasks/taskService';
 import {
   createWorktreeManager,
   type GitRun,
@@ -118,6 +120,7 @@ export function createCore(options: CoreOptions): Core {
     (options.databasePath === ':memory:'
       ? mkdtempSync(join(tmpdir(), 'nexus-worktrees-'))
       : join(dirname(options.databasePath), 'worktrees'));
+  let tasks: TaskService | null = null;
   const conversations = new ConversationService({
     store,
     adapters: options.adapters,
@@ -131,9 +134,21 @@ export function createCore(options: CoreOptions): Core {
       return { executablePath: info?.executablePath ?? null, env: harnessEnvironment(path) };
     },
     onEvent: (event) => broadcast('conversation.event', event),
-    onConversation: (conversation) => broadcast('conversation.updated', conversation),
+    onConversation: (conversation) => {
+      broadcast('conversation.updated', conversation);
+      tasks?.observeConversation(conversation);
+    },
   });
+  const taskService = new TaskService({
+    store,
+    conversations,
+    now,
+    newId: options.newId ?? randomUUID,
+  });
+  tasks = taskService;
   conversations.recoverInterruptedRuns();
+  // Tasks whose child settled while core was down still get their transition.
+  taskService.reconcile();
 
   const handlers: RpcHandlers = {
     'system.ping': () => ({
@@ -155,6 +170,13 @@ export function createCore(options: CoreOptions): Core {
       await conversations.respondToPermission(conversationId, requestId, optionId);
       return {};
     },
+    'task.delegate': async (params) => {
+      const { task, childConversation } = await taskService.delegate(params);
+      return { task, childConversation };
+    },
+    'task.list': ({ conversationId }) => taskService.list(conversationId),
+    'task.inbox': () => ({ items: taskService.inbox() }),
+    'task.respond': (params) => taskService.respond(params),
   };
 
   return {

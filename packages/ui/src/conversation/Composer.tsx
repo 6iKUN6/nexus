@@ -16,7 +16,8 @@ type ComposerProps = {
   onDraftChange: (value: string) => void;
   onSend: () => void;
   onStop: () => void;
-  onPreviewCollaboration: (kind: 'delegate' | 'handoff') => void;
+  /** 'delegate' opens the real dialog (M3); 'handoff' opens the M4 design preview. */
+  onCollaboration: (kind: 'delegate' | 'handoff') => void;
 };
 
 const busyStates = new Set<Conversation['state']>(['running', 'waiting_user']);
@@ -65,12 +66,12 @@ export function Composer(props: ComposerProps) {
         />
 
         <div className="flex items-center gap-1 px-2 pb-2">
-          <Tooltip content="M3 开放：预览委派流程" mini>
+          <Tooltip content="把一部分工作委派给另一个 Agent 的子会话" mini>
             <Button
               size="small"
               type="text"
               icon={<IconMindMapping />}
-              onClick={() => props.onPreviewCollaboration('delegate')}
+              onClick={() => props.onCollaboration('delegate')}
             >
               委派
             </Button>
@@ -80,7 +81,7 @@ export function Composer(props: ComposerProps) {
               size="small"
               type="text"
               icon={<IconSwap />}
-              onClick={() => props.onPreviewCollaboration('handoff')}
+              onClick={() => props.onCollaboration('handoff')}
             >
               交接
             </Button>

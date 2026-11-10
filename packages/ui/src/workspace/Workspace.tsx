@@ -1,10 +1,11 @@
 import { Button, Message } from '@arco-design/web-react';
-import type { Conversation, PermissionOption } from '@nexus/protocol';
+import type { Conversation, PermissionOption, Task } from '@nexus/protocol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NexusAppIcon } from '../brand/NexusMark';
-import { CollaborationPreview } from '../conversation/CollaborationDialogs';
+import { HandoffPreview } from '../conversation/CollaborationDialogs';
 import { Composer } from '../conversation/Composer';
 import { ConversationHeader } from '../conversation/ConversationHeader';
+import { DelegateDialog, type DelegateInput } from '../conversation/DelegateDialog';
 import {
   type NewConversationInput,
   NewConversationModal,
@@ -43,7 +44,8 @@ export function Workspace({
 }: WorkspaceProps) {
   const [ui, setUi] = useUiState();
   const [creating, setCreating] = useState(false);
-  const [preview, setPreview] = useState<'delegate' | 'handoff' | null>(null);
+  const [collaboration, setCollaboration] = useState<'delegate' | 'handoff' | null>(null);
+  const [parentTask, setParentTask] = useState<Task | null>(null);
   const closedStack = useRef<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -68,6 +70,26 @@ export function Workspace({
   // Load the active conversation's history, and keep marking it as read.
   useEffect(() => {
     if (ready && activeId) store.loadEvents(activeId).catch(reportError);
+  }, [ready, activeId, store]);
+
+  // A child conversation shows a banner linking back to its delegating parent.
+  useEffect(() => {
+    if (!ready || !activeId) {
+      setParentTask(null);
+      return;
+    }
+    let cancelled = false;
+    store
+      .listTasks(activeId)
+      .then(({ parent }) => {
+        if (!cancelled) setParentTask(parent);
+      })
+      .catch(() => {
+        if (!cancelled) setParentTask(null);
+      });
+    return () => {
+      cancelled = true;
+    };
   }, [ready, activeId, store]);
   const activeLastSeq = active?.lastSeq;
   useEffect(() => {
@@ -178,6 +200,17 @@ export function Workspace({
     if (active) store.respondToPermission(active.id, requestId, option.id).catch(reportError);
   };
 
+  const respondToTask = (taskId: string, action: 'accept' | 'request_changes', feedback?: string) =>
+    store.respondToTask(taskId, action, feedback).catch(reportError);
+
+  const delegate = async (input: DelegateInput) => {
+    if (!active) return;
+    await store.delegate({ conversationId: active.id, ...input });
+    // Stay in the parent; the delegation card shows live progress.
+    setCollaboration(null);
+    Message.success('子任务已创建，正在独立 worktree 中执行');
+  };
+
   const harness = active ? snapshot.harnesses?.find((h) => h.id === active.harnessId) : undefined;
   const defaultCwd = active?.cwd ?? conversations[0]?.cwd ?? null;
 
@@ -190,6 +223,7 @@ export function Workspace({
         onOpen={open}
         onNew={() => setCreating(true)}
         harnesses={snapshot.harnesses}
+        taskInbox={snapshot.taskInbox}
         theme={theme}
         onThemeChange={onThemeChange}
         searchRef={searchRef}
@@ -212,6 +246,16 @@ export function Workspace({
                 onToggleDetail={() => setUi((s) => ({ ...s, detailOpen: !s.detailOpen }))}
                 onStop={() => store.cancel(active.id).catch(reportError)}
               />
+              {parentTask && (
+                <button
+                  type="button"
+                  className="shrink-0 cursor-pointer border-0 border-b border-line-1 bg-tint-1 px-5 py-1.5 text-left text-xs text-fg-2 hover:bg-tint-2"
+                  onClick={() => open(parentTask.parentConversationId)}
+                >
+                  这是「{byId.get(parentTask.parentConversationId)?.title ?? '另一个会话'}
+                  」委派的子任务 · 点击查看委派会话 →
+                </button>
+              )}
               <Timeline
                 conversationId={active.id}
                 agent={active.harnessId}
@@ -219,6 +263,8 @@ export function Workspace({
                 revision={events?.length ?? 0}
                 onPermission={respond}
                 onRetry={retry}
+                onOpenConversation={open}
+                onTaskRespond={respondToTask}
               />
               <Composer
                 conversation={active}
@@ -228,7 +274,7 @@ export function Workspace({
                 }
                 onSend={send}
                 onStop={() => store.cancel(active.id).catch(reportError)}
-                onPreviewCollaboration={setPreview}
+                onCollaboration={setCollaboration}
               />
             </main>
             {ui.detailOpen && (
@@ -245,12 +291,17 @@ export function Workspace({
           />
         )}
       </div>
-      {active && (
-        <CollaborationPreview
-          kind={preview}
+      {active && collaboration === 'delegate' && (
+        <DelegateDialog
+          visible
           conversation={active}
-          onClose={() => setPreview(null)}
+          harnesses={snapshot.harnesses}
+          onCancel={() => setCollaboration(null)}
+          onDelegate={delegate}
         />
+      )}
+      {active && collaboration === 'handoff' && (
+        <HandoffPreview visible conversation={active} onClose={() => setCollaboration(null)} />
       )}
       <NewConversationModal
         visible={creating}

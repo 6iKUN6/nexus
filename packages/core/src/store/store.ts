@@ -5,6 +5,8 @@ import {
   type ConversationEventBody,
   conversationEventBodySchema,
   type HarnessId,
+  type Task,
+  type TaskStatus,
 } from '@nexus/protocol';
 
 /**
@@ -39,7 +41,50 @@ const MIGRATIONS: string[] = [
   // M2 worktree isolation (ADR 0006); existing rows are direct conversations.
   `ALTER TABLE conversations ADD COLUMN isolation TEXT NOT NULL DEFAULT 'direct';
    ALTER TABLE conversations ADD COLUMN base_cwd TEXT;`,
+  // M3 delegation (ADR 0008): a task links a parent and a child conversation.
+  `CREATE TABLE tasks (
+     id TEXT PRIMARY KEY,
+     parent_conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+     child_conversation_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+     goal TEXT NOT NULL,
+     acceptance TEXT,
+     harness_id TEXT NOT NULL,
+     status TEXT NOT NULL,
+     result_summary TEXT,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );
+   CREATE INDEX tasks_by_parent ON tasks (parent_conversation_id);
+   CREATE INDEX tasks_by_child ON tasks (child_conversation_id);`,
 ];
+
+type TaskRow = {
+  id: string;
+  parent_conversation_id: string;
+  child_conversation_id: string;
+  goal: string;
+  acceptance: string | null;
+  harness_id: string;
+  status: string;
+  result_summary: string | null;
+  created_at: number;
+  updated_at: number;
+};
+
+function toTask(row: TaskRow): Task {
+  return {
+    id: row.id,
+    parentConversationId: row.parent_conversation_id,
+    childConversationId: row.child_conversation_id,
+    goal: row.goal,
+    acceptance: row.acceptance,
+    harnessId: row.harness_id as HarnessId,
+    status: row.status as Task['status'],
+    resultSummary: row.result_summary,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
 
 type ConversationRow = {
   id: string;
@@ -195,6 +240,82 @@ export class Store {
         ? [{ conversationId, seq: row.seq, at: row.at, body: parsed.data }]
         : [];
     });
+  }
+
+  insertTask(task: Task): void {
+    this.db
+      .prepare(
+        `INSERT INTO tasks
+           (id, parent_conversation_id, child_conversation_id, goal, acceptance, harness_id, status, result_summary, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        task.id,
+        task.parentConversationId,
+        task.childConversationId,
+        task.goal,
+        task.acceptance,
+        task.harnessId,
+        task.status,
+        task.resultSummary,
+        task.createdAt,
+        task.updatedAt,
+      );
+  }
+
+  updateTaskStatus(
+    id: string,
+    status: TaskStatus,
+    resultSummary: string | null,
+    now: number,
+  ): Task {
+    const current = this.getTask(id);
+    if (!current) throw new Error(`Unknown task ${id}`);
+    this.db
+      .prepare('UPDATE tasks SET status = ?, result_summary = ?, updated_at = ? WHERE id = ?')
+      .run(status, resultSummary, now, id);
+    return { ...current, status, resultSummary, updatedAt: now };
+  }
+
+  getTask(id: string): Task | null {
+    const row = this.db.prepare('SELECT * FROM tasks WHERE id = ?').get(id) as TaskRow | undefined;
+    return row ? toTask(row) : null;
+  }
+
+  listTasksByParent(parentConversationId: string): Task[] {
+    const rows = this.db
+      .prepare('SELECT * FROM tasks WHERE parent_conversation_id = ? ORDER BY created_at')
+      .all(parentConversationId) as TaskRow[];
+    return rows.map(toTask);
+  }
+
+  getTaskByChild(childConversationId: string): Task | null {
+    const row = this.db
+      .prepare('SELECT * FROM tasks WHERE child_conversation_id = ?')
+      .get(childConversationId) as TaskRow | undefined;
+    return row ? toTask(row) : null;
+  }
+
+  /** Parent conversation ids with tasks waiting on the user (M3 inbox). */
+  listTaskInbox(): Array<{ conversationId: string; status: TaskStatus }> {
+    const rows = this.db
+      .prepare(
+        `SELECT parent_conversation_id AS conversation_id, status FROM tasks
+         WHERE status IN ('review', 'failed')
+         GROUP BY parent_conversation_id
+         HAVING MIN(CASE status WHEN 'review' THEN 0 ELSE 1 END) = 0
+         UNION
+         SELECT parent_conversation_id, status FROM tasks
+         WHERE status = 'failed' AND parent_conversation_id NOT IN (
+           SELECT parent_conversation_id FROM tasks WHERE status = 'review'
+         )
+         GROUP BY parent_conversation_id`,
+      )
+      .all() as Array<{ conversation_id: string; status: string }>;
+    return rows.map((row) => ({
+      conversationId: row.conversation_id,
+      status: row.status as TaskStatus,
+    }));
   }
 
   close(): void {

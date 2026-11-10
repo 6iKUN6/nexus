@@ -4,3 +4,4 @@ export * from './events';
 export * from './harness';
 export * from './memoryPort';
 export * from './rpc';
+export * from './task';

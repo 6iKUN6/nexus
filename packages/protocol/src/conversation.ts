@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { agentEventSchema } from './events';
 import { harnessIdSchema } from './harness';
+import { taskStatusSchema } from './task';
 
 /**
  * Conversation domain (M1). A conversation is the persistent chat the user
@@ -53,6 +54,22 @@ export const coreEventSchema = z.discriminatedUnion('type', [
     runId: z.string(),
     requestId: z.string(),
     optionId: z.string(),
+  }),
+  /** A sub-task was delegated from this conversation; the card starts here. */
+  z.object({
+    type: z.literal('task.delegated'),
+    taskId: z.string(),
+    childConversationId: z.string(),
+    goal: z.string(),
+    acceptance: z.string().nullable(),
+    harnessId: harnessIdSchema,
+  }),
+  /** A delegated task changed status (recorded on the parent's log). */
+  z.object({
+    type: z.literal('task.updated'),
+    taskId: z.string(),
+    status: taskStatusSchema,
+    summary: z.string().nullable(),
   }),
 ]);
 

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { conversationEventSchema, conversationSchema, isolationSchema } from './conversation';
 import { harnessIdSchema, harnessInfoSchema } from './harness';
+import { taskSchema, taskStatusSchema } from './task';
 
 /**
  * Minimal typed JSON-RPC 2.0 over any message port (Electron MessagePort,
@@ -72,6 +73,37 @@ export const rpcMethods = {
   'permission.respond': {
     params: z.object({ conversationId: z.string(), requestId: z.string(), optionId: z.string() }),
     result: z.object({}),
+  },
+  /** Delegates a sub-task: creates a child conversation (worktree-isolated) and starts it. */
+  'task.delegate': {
+    params: z.object({
+      conversationId: z.string(),
+      goal: z.string().trim().min(1).max(500),
+      acceptance: z.string().trim().max(2000).nullable().default(null),
+      harnessId: harnessIdSchema,
+    }),
+    result: z.object({ task: taskSchema, childConversation: conversationSchema }),
+  },
+  /** Tasks of one conversation: children it delegated, and the task it was created by. */
+  'task.list': {
+    params: z.object({ conversationId: z.string() }),
+    result: z.object({ children: z.array(taskSchema), parent: taskSchema.nullable() }),
+  },
+  /** Parent conversations with tasks awaiting review or failed (the M3 inbox). */
+  'task.inbox': {
+    params: z.object({}),
+    result: z.object({
+      items: z.array(z.object({ conversationId: z.string(), status: taskStatusSchema })),
+    }),
+  },
+  /** Accepts a result or sends it back with feedback (which re-runs the child). */
+  'task.respond': {
+    params: z.object({
+      taskId: z.string(),
+      action: z.enum(['accept', 'request_changes']),
+      feedback: z.string().trim().max(2000).default(''),
+    }),
+    result: z.object({ task: taskSchema }),
   },
 } satisfies Record<string, { params: z.ZodType; result: z.ZodType }>;
 

@@ -143,7 +143,7 @@ export function DetailPanel({
           </ol>
         )}
         <p className="m-0 mt-2 text-[11px] text-fg-3">
-          执行结束 ≠ 验收通过；任务与验收标准将在 M3 引入。
+          执行结束 ≠ 验收通过：委派的子任务由你在委派会话中验收（M3）。
         </p>
       </Section>
     </aside>

@@ -1,6 +1,6 @@
 import { Button, Input, Radio, Tooltip } from '@arco-design/web-react';
 import { IconPlus, IconSearch } from '@arco-design/web-react/icon';
-import type { Conversation, HarnessCapabilities, HarnessInfo } from '@nexus/protocol';
+import type { Conversation, HarnessCapabilities, HarnessInfo, TaskStatus } from '@nexus/protocol';
 import { type Ref, useState } from 'react';
 import { NexusMark } from '../brand/NexusMark';
 import { PERSONAS } from '../model/types';
@@ -16,6 +16,8 @@ type SidebarProps = {
   onOpen: (id: string) => void;
   onNew: () => void;
   harnesses: HarnessInfo[] | null;
+  /** Delegated tasks awaiting the user, keyed by parent conversation (M3). */
+  taskInbox: ReadonlyArray<{ conversationId: string; status: TaskStatus }>;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
   searchRef: Ref<HTMLInputElement>;
@@ -38,10 +40,17 @@ export function Sidebar(props: SidebarProps) {
     (c) =>
       !needle || c.title.toLowerCase().includes(needle) || c.cwd.toLowerCase().includes(needle),
   );
-  // Inbox: anything that needs the user — permission prompts and failures.
+  // Inbox: anything that needs the user — permission prompts, failures, and
+  // delegated tasks awaiting acceptance. A parent in the task inbox is idle
+  // itself, so the two sets don't overlap; both are listed.
   const inbox = props.conversations.filter(
     (c) => c.state === 'waiting_user' || c.state === 'failed',
   );
+  const taskRows = props.taskInbox.flatMap((item) => {
+    const conversation = props.conversations.find((c) => c.id === item.conversationId);
+    return conversation ? [{ item, conversation }] : [];
+  });
+  const inboxCount = inbox.length + taskRows.length;
 
   return (
     <aside className="flex h-full w-[264px] shrink-0 flex-col border-r border-line-2 bg-sidebar">
@@ -83,9 +92,9 @@ export function Sidebar(props: SidebarProps) {
       <nav className="min-h-0 flex-1 overflow-y-auto px-2 pb-2" aria-label="会话">
         {mode === 'conversations' ? (
           <>
-            {inbox.length > 0 && (
+            {inboxCount > 0 && (
               <>
-                <SectionTitle count={inbox.length}>待我处理</SectionTitle>
+                <SectionTitle count={inboxCount}>待我处理</SectionTitle>
                 {inbox.map((c) => (
                   <SidebarRow
                     key={`inbox-${c.id}`}
@@ -100,6 +109,26 @@ export function Sidebar(props: SidebarProps) {
                         {c.state === 'failed' ? '运行失败' : '等待授权'} · {c.title}
                       </span>
                       <span className="block truncate text-xs text-fg-3">{c.preview}</span>
+                    </span>
+                  </SidebarRow>
+                ))}
+                {taskRows.map(({ item, conversation }) => (
+                  <SidebarRow
+                    key={`task-${item.conversationId}`}
+                    selected={false}
+                    onClick={() => props.onOpen(item.conversationId)}
+                  >
+                    <span
+                      className={`mt-0.5 size-1.5 shrink-0 self-start rounded-full ${item.status === 'failed' ? 'bg-bad' : 'bg-warn'}`}
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="block truncate text-xs font-medium text-fg-1">
+                        {item.status === 'failed' ? '子任务失败' : '子任务待验收'} ·{' '}
+                        {conversation.title}
+                      </span>
+                      <span className="block truncate text-xs text-fg-3">
+                        {conversation.preview}
+                      </span>
                     </span>
                   </SidebarRow>
                 ))}

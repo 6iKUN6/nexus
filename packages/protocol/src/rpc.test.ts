@@ -21,6 +21,10 @@ const okHandlers: RpcHandlers = {
   'conversation.send': unused,
   'conversation.cancel': unused,
   'permission.respond': unused,
+  'task.delegate': unused,
+  'task.list': unused,
+  'task.inbox': unused,
+  'task.respond': unused,
   'system.ping': () => ({ coreVersion: '0.0.0-test', uptimeMs: 5 }),
   'harness.list': ({ refresh }) => ({
     harnesses: refresh

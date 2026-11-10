@@ -108,6 +108,61 @@ check(
 );
 await click('text=会话');
 
+// --- M3 delegation: delegate to Fake, child asks permission, review, accept ---
+await click('text=委派');
+// Arco keeps closed modals mounted (hidden); scope everything to the visible one.
+const dlg = `.arco-modal-wrapper:not([style*="display: none"]) .arco-modal`;
+await until(
+  `[...document.querySelectorAll('${dlg}')].some(m => m.innerText.includes('委派子任务'))`,
+  'delegate dialog',
+);
+await type(`${dlg} input`, '调查路由守卫的空指针');
+// The executor defaults to a different harness; switch it to Fake (no quota).
+await ev(`document.querySelector('${dlg} .arco-select').click()`);
+await until(
+  `[...document.querySelectorAll('.arco-select-option')].some(o => o.innerText.includes('Fake'))`,
+  'executor options',
+);
+await ev(
+  `[...document.querySelectorAll('.arco-select-option')].find(o => o.innerText.includes('Fake')).click()`,
+);
+await ev(
+  `[...document.querySelectorAll('${dlg} button')].find(b => b.innerText.trim() === '创建子任务').click()`,
+);
+await until(`!!document.querySelector('[aria-label^="委派的子任务"]')`, 'delegation card');
+check(
+  '委派后时间线出现子任务卡片（进行中）',
+  await ev(`document.body.innerText.includes('进行中')`),
+);
+await until(`document.body.innerText.includes('等待授权 · 调查路由守卫')`, 'child waiting', 15000);
+check('子会话在独立 worktree 中运行并停在权限请求', true);
+
+// Open the child, approve its permission, watch the result flow back.
+await ev(
+  `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === '打开子会话').click()`,
+);
+await until(`document.body.innerText.includes('委派的子任务 · 点击查看委派会话')`, 'child banner');
+check('子会话显示指向委派方的横幅', true);
+await click('text=允许');
+await until(`document.body.innerText.includes('子任务待验收 · 整理 notes')`, 'task inbox', 15000);
+check('子任务完成后侧栏出现“子任务待验收”', true);
+await shot(`${process.env.NEXUS_E2E_DIR}/delegation-review.png`);
+
+// Back in the parent: the card shows the result; accept it.
+await ev(
+  `[...document.querySelectorAll('[role=tab]')].find(t => t.title === '整理 notes').click()`,
+);
+await until(`document.body.innerText.includes('子任务结果')`, 'card review');
+check('委派卡片进入待验收并展示子任务结果', true);
+await ev(
+  `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === '验收通过').click()`,
+);
+await until(`document.body.innerText.includes('已通过')`, 'accepted');
+check(
+  '验收通过 → 卡片标记已通过，待办消失',
+  !(await ev(`document.body.innerText.includes('子任务待验收')`)),
+);
+
 // Draft persists
 await type('textarea', '未发送的草稿');
 await sleep(600);
