@@ -21,3 +21,7 @@ Nexus 目前是个人项目，欢迎通过 **fork + Pull Request** 参与。
 ## 安全
 
 不要提交 `.env`、API key、token 或任何凭据。测试用的 harness 录制样本要清除主机路径与账号信息后再提交（见 AGENTS.md「Testing」）。
+
+## 行为准则
+
+对人友善，对代码严格。
