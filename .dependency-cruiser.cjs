@@ -57,6 +57,13 @@ module.exports = {
       to: { path: ['node_modules/electron/', '^electron$'] },
     },
     {
+      name: 'proc-is-a-leaf',
+      severity: 'error',
+      comment: 'proc is a low-level helper for adapters and core; it depends on Node only.',
+      from: { path: '^packages/proc/' },
+      to: { path: ['^packages/(?!proc/)', '^@nexus/(?!proc$)'] },
+    },
+    {
       name: 'core-does-not-reach-up',
       severity: 'error',
       from: { path: '^packages/core/' },

@@ -133,7 +133,9 @@ async function createCodexSession(
     if (!thread?.id) throw new Error('codex 没有返回会话 id');
     return buildSession(link, thread.id);
   } catch (error) {
-    link.kill();
+    // Best effort: the session never started, so the caller only needs the
+    // group gone, not a verdict (the error below is the report).
+    await link.stop();
     throw error;
   }
 }
@@ -300,7 +302,7 @@ function buildSession(link: StdioJsonRpc, threadId: string): AdapterSession {
     async dispose() {
       disposed = true;
       if (active) declineApprovals(active.runId);
-      link.kill();
+      return link.stop();
     },
   };
 }

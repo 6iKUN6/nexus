@@ -28,6 +28,14 @@ export type CreateSessionOptions = {
   env: Record<string, string>;
 };
 
+/** Result of stopping a session: what the caller may safely claim afterwards. */
+export type StopResult = {
+  /** True only when the harness process tree is verified gone. */
+  confirmed: boolean;
+  /** Why it could not be confirmed; shown verbatim. Null when confirmed. */
+  problem: string | null;
+};
+
 export type SendPromptInput = {
   /** Assigned by core; every event of this run carries it. */
   runId: string;
@@ -50,8 +58,12 @@ export type AdapterSession = {
   cancel(runId: string): Promise<void>;
   /** Rejects if the request is unknown, already answered or expired. */
   respondToPermission?(requestId: string, optionId: string): Promise<void>;
-  /** Stops the harness process tree and releases resources. Idempotent. */
-  dispose(): Promise<void>;
+  /**
+   * Stops the harness process tree and releases resources. Idempotent.
+   * `confirmed` is true only when the adapter verified that no process of the
+   * session is left (handoff depends on this; see ADR 0010).
+   */
+  dispose(): Promise<StopResult>;
 };
 
 export type AgentAdapter = {

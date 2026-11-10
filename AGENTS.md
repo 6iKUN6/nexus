@@ -34,6 +34,8 @@ packages/
                    conversation, permissions, cancel, restart recovery), SQLite event log
                    (Drizzle ORM on better-sqlite3, ADR 0009).
                    Plain Node; never imports electron. Runs in an Electron utilityProcess.
+  proc/            process-group helpers shared by adapters and core: verified stop
+                   (SIGTERM → poll → SIGKILL → confirm), ADR 0010.
   adapters/<name>/ one package per harness, implementing AgentAdapter from protocol.
                    fake/ (scripted, tests + dev), claude/ (Claude Agent SDK, M1),
                    codex/ (app-server stdio JSON-RPC, M2), pi/ (--mode rpc JSONL, M2).
@@ -51,8 +53,9 @@ Data flow (ADR 0005): core appends every event to a per-conversation log (monoto
 | Package | May import | Must not import |
 |---|---|---|
 | protocol | `zod` | any other internal package, Node builtins |
-| core | protocol, adapters, Node | electron, ui, desktop |
-| adapters/* | protocol, Node, the harness SDK | core, ui, desktop, other adapters |
+| core | protocol, adapters, proc, Node | electron, ui, desktop |
+| proc | Node | any internal package, electron |
+| adapters/* | protocol, proc, Node, the harness SDK | core, ui, desktop, other adapters |
 | ui | protocol, React, Arco | core, adapters, desktop, electron, Node builtins |
 | desktop/renderer | ui, protocol | core, adapters, electron, Node builtins |
 | desktop/main, preload, core-host | anything | — |
@@ -86,9 +89,10 @@ Need something across a boundary? Add an RPC method to `protocol/src/rpc.ts` (sc
 ## Harness adapters & processes
 
 - Spawn with an executable path and an **argv array**. Never build a shell command string from user input.
-- Run each Run in its own **process group**. Cancel = SIGINT to the group → SIGTERM → SIGKILL, then verify that no group members are left. (The probe self-test showed that tool subprocesses can survive SIGINT.)
+- Run each Run in its own **process group**. Cancel = SIGINT to the group → SIGTERM → SIGKILL, then verify that no group members are left with `@nexus/proc`'s `terminateProcessGroup` (ADR 0010). `dispose()` returns `{ confirmed, problem }`; never claim a stop you did not verify. (The probe self-test showed that tool subprocesses can survive SIGINT.)
 - **Never infer success from terminal text.** If a harness doesn't emit an event, that state is *unknown*, not "done". (A tool still running when its run ends is shown as "结果未知"; a stream that ends without a terminal event becomes `run.failed(no_terminal_event)`.)
-- **Never re-run after a restart.** Interrupted runs are closed as `run.failed(interrupted)`; only the user can retry.
+- **Never re-run after a restart.** Interrupted runs are closed as `run.failed(interrupted)`; only the user can retry. Shutdown drops adapter terminal events so an interrupted run is never mislabelled `cancelled`.
+- **Global run cap**: at most `maxConcurrentRuns` (default 3) harness runs at once; extra prompts wait in a cross-conversation FIFO and are shown as 排队中 (plan §7).
 - Adapters get `executablePath` and `env` from core (`CreateSessionOptions`). They never search PATH themselves.
 - Gate features on `probe()` capabilities and show unsupported features as disabled with a reason. Never fake them.
 - An external session id is only meaningful inside the adapter that created it.

@@ -44,7 +44,8 @@ function fakePiProcess(fixture: string) {
     setTimeout(() => stdout.emit('data', `${JSON.stringify(msg)}\n`), 0);
 
   const child = {
-    pid: 4343,
+    // No real process: stop() reports the spawn as gone immediately.
+    pid: undefined,
     stdin: {
       write(chunk: string) {
         for (const line of chunk.split('\n')) {
@@ -164,7 +165,8 @@ describe('pi adapter session', () => {
       setTimeout(() => stdout.emit('data', `${JSON.stringify(msg)}\n`), 0);
     let prompts = 0;
     const child = {
-      pid: 4444,
+      // No real process: stop() reports the spawn as gone immediately.
+      pid: undefined,
       stdin: {
         write(chunk: string) {
           const msg = JSON.parse(chunk.trim()) as WireMessage;

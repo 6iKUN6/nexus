@@ -19,15 +19,21 @@ afterEach(() => {
 });
 
 function tempDb(): string {
+  return join(tempDir(), 'nexus.sqlite');
+}
+
+/** A fresh working directory (direct conversations are one-per-directory). */
+function tempDir(): string {
   const dir = mkdtempSync(join(tmpdir(), 'nexus-core-'));
   cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
-  return join(dir, 'nexus.sqlite');
+  return dir;
 }
 
 function setup(
   adapter: AgentAdapter = createFakeAdapter(),
   dbPath = ':memory:',
   worktreeCreate?: (cwd: string, id: string) => Promise<{ cwd: string; repoRoot: string }>,
+  maxConcurrentRuns?: number,
 ) {
   const store = new Store(dbPath);
   const events: ConversationEvent[] = [];
@@ -48,6 +54,7 @@ function setup(
     onEvent: (e) => events.push(e),
     onConversation: (c) => updates.push(c),
     newId: () => `id-${++id}`,
+    ...(maxConcurrentRuns === undefined ? {} : { maxConcurrentRuns }),
   });
   return { store, service, events, updates, worktreeCalls };
 }
@@ -102,6 +109,65 @@ describe('ConversationService', () => {
     expect(types(events)).toContain('run.queued');
     const texts = events.flatMap((e) => (e.body.type === 'text.delta' ? [e.body.text] : []));
     expect(texts).toEqual(['re:one', 're:two']);
+  });
+
+  it('caps concurrent runs across conversations and starts queued ones in order', async () => {
+    const { service, events } = setup(
+      createFakeAdapter({ script: (p) => [{ kind: 'text', text: `done:${p}` }], stepDelayMs: 200 }),
+      ':memory:',
+      undefined,
+      1,
+    );
+    const a = await service.create({ harnessId: 'fake', cwd: tempDir() });
+    const b = await service.create({ harnessId: 'fake', cwd: tempDir() });
+    const first = service.send(a.id, 'a1');
+    const second = service.send(b.id, 'b1');
+    expect(first.queued).toBe(false);
+    // The cap is reached, so this prompt waits even though its conversation is idle.
+    expect(second.queued).toBe(true);
+    // b waits while a holds the only slot: its run has not started.
+    expect(events.some((e) => e.body.type === 'run.started' && e.body.runId === second.runId)).toBe(
+      false,
+    );
+    expect(service.get(b.id).state).toBe('idle');
+
+    await waitFor(() => types(events).filter((t) => t === 'run.completed').length === 2);
+    const started = events.flatMap((e) => (e.body.type === 'run.started' ? [e.body.runId] : []));
+    expect(started).toEqual([first.runId, second.runId]);
+    expect(service.get(b.id).state).toBe('idle');
+  });
+
+  it('cancels a run that is still waiting for a global slot', async () => {
+    const { service, events } = setup(
+      createFakeAdapter({ stepDelayMs: 40 }),
+      ':memory:',
+      undefined,
+      1,
+    );
+    const a = await service.create({ harnessId: 'fake', cwd: tempDir() });
+    const b = await service.create({ harnessId: 'fake', cwd: tempDir() });
+    service.send(a.id, 'a1');
+    const waiting = service.send(b.id, 'b1');
+    expect(waiting.queued).toBe(true);
+
+    await expect(service.cancel(b.id)).resolves.toBe(true);
+    const endOfB = events.findLast(
+      (e) => e.conversationId === b.id && e.body.type === 'run.completed',
+    )?.body;
+    expect(endOfB).toMatchObject({ runId: waiting.runId, stopReason: 'cancelled' });
+
+    // The slot goes back to the pool: a new prompt in b starts normally.
+    await waitFor(() =>
+      events.some((e) => e.conversationId === a.id && e.body.type === 'run.completed'),
+    );
+    const next = service.send(b.id, 'b2');
+    await waitFor(() =>
+      events.some(
+        (e) =>
+          e.conversationId === b.id && e.body.type === 'run.started' && e.body.runId === next.runId,
+      ),
+    );
+    expect(next.queued).toBe(false);
   });
 
   it('routes permission answers to the adapter and records them', async () => {
@@ -164,7 +230,9 @@ describe('ConversationService', () => {
             yield { type: 'run.started', runId };
           },
           async cancel() {},
-          async dispose() {},
+          async dispose() {
+            return { confirmed: true, problem: null };
+          },
         };
       },
     };

@@ -10,6 +10,7 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@nexus/proc": "workspace:*",
     "@nexus/protocol": "workspace:*"
   }
 }

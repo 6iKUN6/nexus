@@ -53,7 +53,8 @@ function fakeCodexProcess(fixture: string) {
   };
 
   const child = {
-    pid: 4242,
+    // No real process: stop() reports the spawn as gone immediately.
+    pid: undefined,
     stdin: {
       write(chunk: string) {
         for (const line of chunk.split('\n')) {

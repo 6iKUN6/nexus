@@ -10,6 +10,7 @@ import {
   type HarnessId,
   type Isolation,
   RpcError,
+  type StopResult,
 } from '@nexus/protocol';
 import type { ConversationPatch, Store } from '../store/store';
 import { findRepoRoot, type GitRun, type WorktreeManager } from '../worktree/gitWorktree';
@@ -46,6 +47,8 @@ export type ConversationServiceDeps = {
   gitRun: GitRun;
   onEvent: (event: ConversationEvent) => void;
   onConversation: (conversation: Conversation) => void;
+  /** Runs allowed to execute at once across all conversations. Defaults to 3. */
+  maxConcurrentRuns?: number;
   now?: () => number;
   newId?: () => string;
 };
@@ -65,10 +68,23 @@ export class ConversationService {
   private readonly live = new Map<string, Live>();
   private readonly now: () => number;
   private readonly newId: () => string;
+  private readonly maxConcurrentRuns: number;
+  /** Conversations with a run in flight (started or waiting for a slot). */
+  private readonly running = new Set<string>();
+  /** Runs waiting for a free slot, FIFO across conversations. */
+  private waiting: Array<{ conversationId: string; prompt: QueuedPrompt }> = [];
+  /**
+   * Set while shutting down. Aborting a session makes adapters emit a terminal
+   * `cancelled` event; persisting it would make an interrupted run look like a
+   * clean user cancel. During shutdown events are dropped instead, so the next
+   * boot's recovery closes those runs as `interrupted` (ADR 0005 §5).
+   */
+  private disposing = false;
 
   constructor(private readonly deps: ConversationServiceDeps) {
     this.now = deps.now ?? Date.now;
     this.newId = deps.newId ?? randomUUID;
+    this.maxConcurrentRuns = deps.maxConcurrentRuns ?? 3;
   }
 
   list(): Conversation[] {
@@ -195,12 +211,22 @@ export class ConversationService {
       { title, preview: text },
     );
 
-    const queued = live.activeRunId !== null;
-    if (queued) {
+    // A prompt is queued when its conversation is busy, or when every global
+    // run slot is taken (plan §7: at most 3 harness processes at once).
+    const busy = live.activeRunId !== null;
+    const hasSlot = this.running.size < this.maxConcurrentRuns;
+    const queued = busy || !hasSlot;
+    if (queued) this.append(conversationId, { type: 'run.queued', runId, messageId }, {});
+    if (busy) {
       live.queue.push({ runId, text });
-      this.append(conversationId, { type: 'run.queued', runId, messageId }, {});
     } else {
-      void this.run(conversationId, { runId, text });
+      live.activeRunId = runId;
+      if (hasSlot) {
+        this.running.add(conversationId);
+        void this.run(conversationId, { runId, text });
+      } else {
+        this.waiting.push({ conversationId, prompt: { runId, text } });
+      }
     }
     return { messageId, runId, queued };
   }
@@ -208,8 +234,26 @@ export class ConversationService {
   async cancel(conversationId: string): Promise<boolean> {
     this.require(conversationId);
     const live = this.live.get(conversationId);
-    if (!live?.activeRunId || !live.session) return false;
-    await live.session.cancel(live.activeRunId);
+    const runId = live?.activeRunId;
+    if (!live || !runId) return false;
+    if (live.session) {
+      await live.session.cancel(runId);
+      return true;
+    }
+    // Waiting for a global run slot: nothing has started, so there is no
+    // process to signal. Drop it and close the run as cancelled.
+    const index = this.waiting.findIndex(
+      (w) => w.conversationId === conversationId && w.prompt.runId === runId,
+    );
+    if (index < 0) return false;
+    this.waiting.splice(index, 1);
+    live.activeRunId = null;
+    this.append(
+      conversationId,
+      { type: 'run.completed', runId, stopReason: 'cancelled' },
+      { state: 'idle', preview: '已停止运行' },
+    );
+    this.nextInConversation(conversationId);
     return true;
   }
 
@@ -272,9 +316,48 @@ export class ConversationService {
     return recovered;
   }
 
-  async dispose(): Promise<void> {
-    await Promise.all([...this.live.values()].map((live) => live.session?.dispose()));
+  /**
+   * Stops the live harness process of a conversation and reports whether it is
+   * verified gone (handoff depends on this, ADR 0010). The session object is
+   * dropped either way, so the next prompt starts a fresh one.
+   */
+  async stopSession(conversationId: string): Promise<StopResult> {
+    this.require(conversationId);
+    const live = this.live.get(conversationId);
+    const session = live?.session;
+    // A run waiting for a global slot has no process; drop it too, or it would
+    // start later in a session the caller believes is stopped.
+    this.waiting = this.waiting.filter((w) => w.conversationId !== conversationId);
+    this.running.delete(conversationId);
+    this.live.delete(conversationId);
+    if (!session) return { confirmed: true, problem: null };
+    return session.dispose();
+  }
+
+  /** Disposes every live session. Returns the outcomes that could not be confirmed. */
+  async disposeSessions(): Promise<StopResult[]> {
+    this.disposing = true;
+    const sessions = [...this.live.values()].flatMap((live) =>
+      live.session ? [live.session] : [],
+    );
     this.live.clear();
+    const outcomes = await Promise.allSettled(sessions.map((session) => session.dispose()));
+    return outcomes.flatMap((outcome) =>
+      outcome.status === 'rejected'
+        ? [
+            {
+              confirmed: false,
+              problem: `停止会话时出错：${
+                outcome.reason instanceof Error ? outcome.reason.message : String(outcome.reason)
+              }`,
+            },
+          ]
+        : [outcome.value],
+    );
+  }
+
+  async dispose(): Promise<void> {
+    await this.disposeSessions();
   }
 
   // --- internals ---
@@ -295,6 +378,7 @@ export class ConversationService {
   }
 
   private append(conversationId: string, body: ConversationEventBody, patch: ConversationPatch) {
+    if (this.disposing) return;
     const derived = { ...deriveFromEvent(body), ...patch };
     const before = this.deps.store.getConversation(conversationId);
     const { event, conversation } = this.deps.store.appendEvent(
@@ -336,9 +420,34 @@ export class ConversationService {
     return session;
   }
 
+  /** Starts waiting runs in FIFO order while slots are free. */
+  private pump(): void {
+    while (this.waiting.length > 0 && this.running.size < this.maxConcurrentRuns) {
+      const next = this.waiting.shift();
+      if (!next) return;
+      this.running.add(next.conversationId);
+      void this.run(next.conversationId, next.prompt);
+    }
+  }
+
+  /** Starts the next prompt typed in this conversation while it was busy. */
+  private nextInConversation(conversationId: string): void {
+    const live = this.live.get(conversationId);
+    const next = live?.queue.shift();
+    if (!live || !next) return;
+    live.activeRunId = next.runId;
+    if (this.running.size < this.maxConcurrentRuns) {
+      this.running.add(conversationId);
+      void this.run(conversationId, next);
+    } else {
+      // Its `run.queued` event was recorded when it was sent; it stays queued
+      // until a slot frees up.
+      this.waiting.push({ conversationId, prompt: next });
+    }
+  }
+
   private async run(conversationId: string, prompt: QueuedPrompt): Promise<void> {
     const live = this.liveFor(conversationId);
-    live.activeRunId = prompt.runId;
     let terminal = false;
     try {
       const session = await this.sessionFor(this.require(conversationId), live);
@@ -380,8 +489,11 @@ export class ConversationService {
       );
     }
     live.activeRunId = null;
-    const next = live.queue.shift();
-    if (next) void this.run(conversationId, next);
+    this.running.delete(conversationId);
+    // Free slot first, so a globally waiting run can take it; then this
+    // conversation's own queue (which is FIFO per conversation).
+    this.pump();
+    this.nextInConversation(conversationId);
   }
 }
 

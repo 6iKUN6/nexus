@@ -258,6 +258,11 @@ function createClaudeSession(
         denyAllFor(active.runId, 'Session closed.');
         active.abort.abort();
       }
+      // The SDK owns the CLI subprocess (it spawns one per query and closes it
+      // on abort, with its own stdin-EOF → SIGTERM → SIGKILL path). There is no
+      // handle for us to poll, so a stopped query is reported as confirmed; an
+      // idle session has no process at all.
+      return { confirmed: true, problem: null };
     },
   };
 }

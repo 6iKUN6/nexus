@@ -1,4 +1,5 @@
 import type { ChildProcess } from 'node:child_process';
+import { type StopOutcome, terminateProcessGroup } from '@nexus/proc';
 
 /**
  * Minimal JSON-RPC 2.0 client over a child process's stdio (one message per
@@ -36,8 +37,13 @@ export type StdioJsonRpc = {
   onExit(listener: (code: number | null, signal: NodeJS.Signals | null) => void): () => void;
   /** Last stderr lines, for error diagnostics. */
   stderrTail(): string;
-  /** SIGTERM the process group, then SIGKILL after a grace period. */
-  kill(): void;
+  /** The process group id, for stop verification. */
+  pid: number | undefined;
+  /**
+   * SIGTERM the group, SIGKILL after a grace period, and verify it is gone.
+   * Adapters must await this in dispose(): handoff needs a confirmed stop.
+   */
+  stop(): Promise<StopOutcome>;
 };
 
 type Pending = { resolve: (value: unknown) => void; reject: (error: Error) => void };
@@ -149,22 +155,9 @@ export function createStdioJsonRpc(child: ChildProcess): StdioJsonRpc {
       return () => exitListeners.delete(listener);
     },
     stderrTail: () => stderrLines.join('\n'),
-    kill() {
-      // The app-server owns tool subprocesses; kill the whole group (spawned
-      // detached) so nothing outlives the session.
-      try {
-        if (child.pid) process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        child.kill('SIGTERM');
-      }
-      const timer = setTimeout(() => {
-        try {
-          if (child.pid) process.kill(-child.pid, 'SIGKILL');
-        } catch {
-          child.kill('SIGKILL');
-        }
-      }, 2000);
-      timer.unref();
-    },
+    pid: child.pid,
+    // The app-server owns tool subprocesses; the whole group (spawned detached)
+    // is signalled, then polled until it is gone.
+    stop: () => terminateProcessGroup(child.pid),
   };
 }

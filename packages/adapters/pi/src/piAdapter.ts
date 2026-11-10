@@ -1,5 +1,6 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
+import { type StopOutcome, terminateProcessGroup } from '@nexus/proc';
 import type {
   AdapterSession,
   AgentAdapter,
@@ -93,7 +94,8 @@ type PiProcess = {
   onMessage(listener: (msg: WireMessage) => void): () => void;
   onExit(listener: (code: number | null, signal: NodeJS.Signals | null) => void): () => void;
   stderrTail(): string;
-  kill(): void;
+  /** SIGTERM the group, SIGKILL after a grace period, and verify it is gone. */
+  stop(): Promise<StopOutcome>;
 };
 
 function startPiProcess(
@@ -157,21 +159,7 @@ function startPiProcess(
       return () => exitListeners.delete(listener);
     },
     stderrTail: () => stderrLines.join('\n'),
-    kill() {
-      try {
-        if (child.pid) process.kill(-child.pid, 'SIGTERM');
-      } catch {
-        child.kill('SIGTERM');
-      }
-      const timer = setTimeout(() => {
-        try {
-          if (child.pid) process.kill(-child.pid, 'SIGKILL');
-        } catch {
-          child.kill('SIGKILL');
-        }
-      }, 2000);
-      timer.unref();
-    },
+    stop: () => terminateProcessGroup(child.pid),
   };
 }
 
@@ -348,7 +336,7 @@ async function createPiSession(
 
     async dispose() {
       disposed = true;
-      proc.kill();
+      return proc.stop();
     },
   };
 }

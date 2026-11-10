@@ -235,6 +235,8 @@ function createFakeSession(
     async dispose() {
       disposed = true;
       for (const controller of runs.values()) controller.abort();
+      // Nothing is spawned: there is no process that could still be running.
+      return { confirmed: true, problem: null };
     },
   };
 }

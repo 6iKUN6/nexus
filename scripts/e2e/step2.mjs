@@ -4,12 +4,16 @@ const c = await connect(process.argv[2]);
 const { ev, until, click, sleep } = c;
 await until(`document.body.innerText.includes('整理 notes')`, 'restored conversation', 8000);
 check('重启后会话列表恢复', true);
-check(
-  '重启后 Tab 恢复并打开同一会话',
-  await ev(
-    `[...document.querySelectorAll('[role=tab]')].some(t => t.getAttribute('aria-selected') === 'true' && t.title === '整理 notes')`,
-  ),
-);
+// Tabs are restored once the conversation list arrives; poll instead of
+// checking a single instant (the sidebar can show the title earlier).
+const tabRestored = await until(
+  `[...document.querySelectorAll('[role=tab]')].some(t => t.getAttribute('aria-selected') === 'true' && t.title === '整理 notes')`,
+  'restored tab',
+  8000,
+)
+  .then(() => true)
+  .catch(() => false);
+check('重启后 Tab 恢复并打开同一会话', tabRestored);
 await until(`document.body.innerText.includes('已完成：整理 notes')`, 'history', 8000);
 check(
   '重启后历史消息完整',

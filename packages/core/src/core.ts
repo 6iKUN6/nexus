@@ -37,6 +37,8 @@ export type CoreOptions = {
   resolvePath?: () => Promise<string>;
   worktrees?: WorktreeManager;
   gitRun?: GitRun;
+  /** Global cap on concurrent harness runs (plan §7). Defaults to 3. */
+  maxConcurrentRuns?: number;
   now?: () => number;
   newId?: () => string;
 };
@@ -126,6 +128,9 @@ export function createCore(options: CoreOptions): Core {
     adapters: options.adapters,
     now,
     ...(options.newId ? { newId: options.newId } : {}),
+    ...(options.maxConcurrentRuns === undefined
+      ? {}
+      : { maxConcurrentRuns: options.maxConcurrentRuns }),
     worktrees: options.worktrees ?? createWorktreeManager(worktreeDir, options.gitRun),
     gitRun: options.gitRun ?? realGitRun,
     runtimeFor: async (harnessId): Promise<HarnessRuntime> => {

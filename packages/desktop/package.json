@@ -17,6 +17,7 @@
     "@nexus/adapter-fake": "workspace:*",
     "@nexus/adapter-pi": "workspace:*",
     "@nexus/core": "workspace:*",
+    "@nexus/proc": "workspace:*",
     "@nexus/protocol": "workspace:*",
     "@nexus/ui": "workspace:*",
     "@tailwindcss/vite": "~4.3.4",
