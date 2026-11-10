@@ -45,7 +45,7 @@ packages/
 probes/            M0 throwaway scripts that record real harness behaviour. Not shipped.
 ```
 
-Runtime: `renderer ──MessagePort (JSON-RPC)──▶ core (utilityProcess) ──spawn──▶ harness CLIs`. Main creates the channel and is not involved after that. Main only handles windows, the tray, dialogs and notifications.
+Runtime: `renderer ──MessagePort (JSON-RPC)──▶ core (utilityProcess) ──spawn──▶ harness CLIs`. Main creates the channel and is not involved after that. Main only handles windows and the directory picker; a tray and notifications are not implemented yet.
 
 Data flow (ADR 0005): core appends every event to a per-conversation log (monotonic `seq`) and pushes it as a notification. The UI's `CoreStore` mirrors it, dedupes by seq and refills gaps, and `buildTimeline(events)` derives everything on screen. **Never put derived UI state into core events, and never mutate history.** Append a new event instead.
 

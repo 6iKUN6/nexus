@@ -1,0 +1,10 @@
+# Normalize line endings; the project targets macOS/Linux tooling.
+* text=auto eol=lf
+
+*.png binary
+*.icns binary
+*.jpg binary
+*.woff2 binary
+
+# Generated files: keep diffs readable.
+pnpm-lock.yaml linguist-generated=true

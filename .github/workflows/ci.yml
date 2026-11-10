@@ -2,7 +2,7 @@ name: CI
 
 # `pnpm check` is the single gate documented in AGENTS.md: Biome, tsc,
 # dependency-cruiser boundaries and unit tests. The e2e smoke test is
-# macOS-only and drives a real Electron window, so it stays out of CI.
+# macOS-only and drives a real Electron window, so it runs in its own job.
 on:
   pull_request:
   push:
@@ -23,11 +23,62 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
-      # Cache key includes the lockfile; better-sqlite3 ships prebuilds, so no
-      # native toolchain is needed.
+      # better-sqlite3 ships prebuilds, so no native toolchain is needed.
       - uses: actions/setup-node@v4
         with:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm check
+
+  # Dependency advisories in what actually ships. Dev-only tooling (electron
+  # builder and friends) is excluded: it never reaches users, and its
+  # advisories would otherwise block every unrelated PR.
+  audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm audit --prod --audit-level=high
+
+  # The real app, driven over CDP with the scripted Fake harness (no quota).
+  # macOS runner: the app is macOS-only for now.
+  e2e:
+    runs-on: macos-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # Electron ships without its binary and fetches it lazily on the first
+      # require(); electron-vite does not trigger that, so do it up front and
+      # keep the download out of the timed test run.
+      - name: Cache the Electron binary
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Download the Electron binary
+        working-directory: packages/desktop
+        run: node -e "require('electron')"
+      - run: pnpm e2e:smoke
+        env:
+          # Fixed location so the screenshots and dev.log below survive failure.
+          NEXUS_E2E_DIR: ${{ runner.temp }}/nexus-e2e
+      - name: Upload screenshots and logs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: e2e-${{ github.run_id }}
+          path: ${{ runner.temp }}/nexus-e2e
+          if-no-files-found: ignore

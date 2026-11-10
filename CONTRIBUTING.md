@@ -5,7 +5,8 @@ Nexus 目前是个人项目，欢迎通过 **fork + Pull Request** 参与。
 ## 流程
 
 1. Fork 本仓库，从 `main` 开分支。
-2. 本地 `pnpm install`，改完后 **`pnpm check` 必须通过**（lint、typecheck、包边界规则、单元测试，与 CI 完全一致）。
+2. 本地 `pnpm install && pnpm hooks:install`，改完后 **`pnpm check` 必须通过**（lint、typecheck、包边界规则、单元测试，与 CI 完全一致）。
+   装上 hooks 后，提交时只检查暂存文件，推送前自动跑完整 `pnpm check`（`--no-verify` 可跳过）。
 3. 涉及协议层（`packages/protocol`）的改动请先开 issue 说明——它是所有层之间的契约。
 4. 提交 PR。**只接受来自 fork 的 PR**，本仓库内的分支 PR 会被 `fork-only` 检查拦下。
 
