@@ -10,9 +10,12 @@
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
-    "@nexus/protocol": "workspace:*"
+    "@nexus/protocol": "workspace:*",
+    "better-sqlite3": "^13.0.3",
+    "drizzle-orm": "^0.45.4"
   },
   "devDependencies": {
-    "@nexus/adapter-fake": "workspace:*"
+    "@nexus/adapter-fake": "workspace:*",
+    "@types/better-sqlite3": "^9.6.0"
   }
 }

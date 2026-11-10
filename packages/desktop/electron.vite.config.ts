@@ -4,8 +4,8 @@ import react from '@vitejs/plugin-react';
 import { defineConfig } from 'electron-vite';
 
 // Internal @nexus/* packages are devDependencies, so electron-vite bundles them
-// instead of externalising. Only native modules (e.g. better-sqlite3, later)
-// should go into "dependencies".
+// instead of externalising. Only native modules (better-sqlite3, ADR 0009) go
+// into "dependencies" — they must live outside the bundle and the asar.
 export default defineConfig({
   main: {
     build: {

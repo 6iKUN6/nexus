@@ -7,3 +7,7 @@ packages:
 allowBuilds:
   electron: true
   electron-winstaller: false
+  # Ships Node-API prebuilds (prebuilds/*.node) for every platform/arch, so its
+  # node-gyp build step is never needed — not even for Electron (verified in the
+  # Electron 45 utilityProcess). Explicit false keeps pnpm from warning.
+  better-sqlite3: false

@@ -31,7 +31,8 @@ pnpm probe            # M0 capability probes; the default `help` scenario is fre
 packages/
   protocol/        zod schemas, event types, adapter contract, typed JSON-RPC. Shared by everything.
   core/            all product logic: harness detection, conversations (serial queue per
-                   conversation, permissions, cancel, restart recovery), SQLite event log.
+                   conversation, permissions, cancel, restart recovery), SQLite event log
+                   (Drizzle ORM on better-sqlite3, ADR 0009).
                    Plain Node; never imports electron. Runs in an Electron utilityProcess.
   adapters/<name>/ one package per harness, implementing AgentAdapter from protocol.
                    fake/ (scripted, tests + dev), claude/ (Claude Agent SDK, M1),
@@ -80,7 +81,7 @@ Need something across a boundary? Add an RPC method to `protocol/src/rpc.ts` (sc
 - Entry setup lives in `@nexus/ui/setup` (Arco React 19 adapter, global CSS, early theme application) and must be imported before rendering.
 - **Brand**: the logo source of truth is `assets/logos/` (designer-owned; don't edit or reformat it, and Biome ignores it). The in-app mark is `<NexusMark>` / `<NexusAppIcon>` in `packages/ui/src/brand/`. Its paths are copied from `nexus-mark.svg`, and it uses `currentColor` with the `text-brand-mark` token (ink #172924 in light mode, paper #F4F5EF in dark). Use `bg-brand-mint` / `text-brand-ink` for brand surfaces. The UI accent stays Apple systemBlue (`brand`); don't confuse the two.
 - View models live in `packages/ui/src/model/` (`types.ts`, `buildTimeline.ts`, `coreStore.ts`). Components receive view models and callbacks; only `Workspace` talks to `CoreStore`.
-- Delegate and handoff dialogs are **design previews** (M3/M4), clearly labelled and not submittable. Don't wire them to core until the feature lands.
+- Delegation is live (M3, ADR 0008): `DelegateDialog` → `task.delegate`, progress folded into a `DelegationCard`. The **handoff** dialog is still a design preview (M4), clearly labelled and not submittable. Don't wire it to core until the feature lands.
 
 ## Harness adapters & processes
 
