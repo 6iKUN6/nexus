@@ -99,11 +99,20 @@ export class CoreStore {
     return task;
   }
 
-  async createConversation(input: { harnessId: HarnessId; cwd: string; title?: string }) {
+  async createConversation(input: {
+    harnessId: HarnessId;
+    cwd: string;
+    isolation: 'direct' | 'worktree';
+    title?: string;
+  }) {
     const { conversation } = await this.rpc().request('conversation.create', input);
     this.upsert(conversation);
     this.merge(conversation.id, []);
     return conversation;
+  }
+
+  inspectPath(cwd: string) {
+    return this.rpc().request('path.inspect', { cwd });
   }
 
   send(conversationId: string, text: string) {

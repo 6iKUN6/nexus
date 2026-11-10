@@ -12,6 +12,10 @@ ROOT=${0:A:h:h:h}
 export NEXUS_E2E_DIR=$(mktemp -d -t nexus-e2e)
 mkdir -p "$NEXUS_E2E_DIR/data" "$NEXUS_E2E_DIR/project"
 echo hello > "$NEXUS_E2E_DIR/project/README.md"
+# The project is a git repo so the worktree-isolation path can be exercised.
+git -C "$NEXUS_E2E_DIR/project" init -q
+git -C "$NEXUS_E2E_DIR/project" -c user.name=e2e -c user.email=e2e@nexus.local add README.md
+git -C "$NEXUS_E2E_DIR/project" -c user.name=e2e -c user.email=e2e@nexus.local commit -qm init
 PORT=9333
 # Regex (pkill -f), scoped to this repo's Electron so other Electron apps are never touched.
 APP_PATTERN="$ROOT/node_modules/.pnpm/electron@[^/]*/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"

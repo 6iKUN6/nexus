@@ -24,7 +24,12 @@ await ev(
   `[...document.querySelectorAll('.arco-modal .arco-radio')].find(r => r.innerText.includes('Fake')).click()`,
 );
 await type('.arco-modal input.font-mono', `${process.env.NEXUS_E2E_DIR}/project`);
-await sleep(200);
+// The project dir is a git repo: the worktree option appears and auto-selects.
+await until(
+  `[...document.querySelectorAll('.arco-modal .arco-radio')].some(r => r.innerText.includes('独立 worktree') && r.classList.contains('arco-radio-checked'))`,
+  'worktree auto-selected',
+);
+check('git 仓库默认选中 worktree 隔离', true);
 await ev(
   `[...document.querySelectorAll('.arco-modal button')].find(b => b.innerText.trim() === '创建').click()`,
 );
@@ -34,6 +39,8 @@ await until(
 );
 await until(`document.body.innerText.includes('和 Fake 开始对话')`, 'empty conversation');
 check('创建会话后打开空会话', true);
+await until(`document.body.innerText.includes('在独立 worktree 中运行')`, 'worktree detail');
+check('详情面板标注 worktree 隔离', true);
 
 // Send a message (Enter), watch streaming → tool → permission
 await type('textarea', '整理 notes');

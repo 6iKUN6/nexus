@@ -88,9 +88,16 @@ export function DetailPanel({
             />
           </Tooltip>
         </div>
-        <p className="m-0 mt-2 text-[11px] text-warn">
-          直接在此目录运行。独立 worktree 隔离将在 M2 提供。
-        </p>
+        {conversation.isolation === 'worktree' ? (
+          <p className="m-0 mt-2 text-[11px] leading-relaxed text-ok">
+            在独立 worktree 中运行，不影响你的工作区。
+            {conversation.baseCwd && (
+              <span className="block text-fg-3">基于 {conversation.baseCwd}</span>
+            )}
+          </p>
+        ) : (
+          <p className="m-0 mt-2 text-[11px] text-warn">直接在此目录运行，改动立即生效。</p>
+        )}
       </Section>
 
       <Section title="会话">

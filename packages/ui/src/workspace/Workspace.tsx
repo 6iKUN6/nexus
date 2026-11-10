@@ -257,6 +257,7 @@ export function Workspace({
         harnesses={snapshot.harnesses}
         defaultCwd={defaultCwd}
         pickDirectory={pickDirectory}
+        inspectPath={(cwd) => store.inspectPath(cwd)}
         onCancel={() => setCreating(false)}
         onCreate={create}
       />

@@ -15,6 +15,8 @@ const conversation: Conversation = {
   title: 't',
   harnessId: 'fake',
   cwd: '/w',
+  isolation: 'direct',
+  baseCwd: null,
   externalSessionId: null,
   state: 'idle',
   lastSeq: 0,
@@ -45,6 +47,7 @@ function setup(history: ConversationEvent[]) {
       return { events: history.filter((e) => e.seq > afterSeq) };
     },
     'conversation.create': unused,
+    'path.inspect': unused,
     'conversation.send': unused,
     'conversation.cancel': unused,
     'permission.respond': unused,

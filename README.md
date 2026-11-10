@@ -15,7 +15,7 @@ pnpm dev      # 启动桌面应用
 pnpm check    # 提交前必跑
 ```
 
-当前进度：**M1 单 Agent 闭环**。可以在 IM 界面里和 Claude Code 对话，支持流式输出、工具调用、权限卡片、排队、停止，会话持久化，重启后核对状态。Codex 和 pi 在 M2 接入。
+当前进度：**M2 进行中**。M1 单 Agent 闭环已完成：IM 界面里和 Claude Code 对话，流式输出、思考过程、工具调用（含子代理嵌套）、权限卡片、排队、停止，会话持久化，重启后核对状态。M2 已完成 worktree 隔离（ADR 0006）：git 仓库中的会话默认在独立 worktree 运行，同一目录只允许一个 direct 会话。Codex 和 pi 适配器开发中。
 
 ```bash
 NEXUS_FAKE_HARNESS=1 pnpm dev   # 加一个不消耗额度的演示 harness

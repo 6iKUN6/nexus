@@ -90,6 +90,7 @@ Need something across a boundary? Add an RPC method to `protocol/src/rpc.ts` (sc
 - Adapters get `executablePath` and `env` from core (`CreateSessionOptions`). They never search PATH themselves.
 - Gate features on `probe()` capabilities and show unsupported features as disabled with a reason. Never fake them.
 - An external session id is only meaningful inside the adapter that created it.
+- **Worktree isolation (ADR 0006)**: conversations run in a detached-HEAD worktree under `<userData>/worktrees/<id>` by default when the cwd is a git repo; `direct` mode is opt-in and one directory allows only one direct conversation. `Conversation.cwd` is always the actual run directory — adapters never need to know about isolation.
 - GUI apps don't get the shell PATH. Always resolve CLIs through `resolveLoginShellPath()`.
 - Record behaviour against real CLI versions in `probes/` first, then copy representative outputs into adapter test fixtures.
 

@@ -8,9 +8,11 @@ import {
   type ConversationEvent,
   type ConversationEventBody,
   type HarnessId,
+  type Isolation,
   RpcError,
 } from '@nexus/protocol';
 import type { ConversationPatch, Store } from '../store/store';
+import { findRepoRoot, type GitRun, type WorktreeManager } from '../worktree/gitWorktree';
 
 /**
  * Owns conversation lifecycle: one serial prompt queue per conversation,
@@ -22,6 +24,9 @@ export const ErrorCode = {
   NotFound: 4004,
   Unsupported: 4005,
   InvalidCwd: 4006,
+  NotARepo: 4007,
+  WorktreeFailed: 4008,
+  CwdInUse: 4009,
   PermissionExpired: 4010,
 } as const;
 
@@ -35,6 +40,10 @@ export type ConversationServiceDeps = {
   adapters: Partial<Record<HarnessId, AgentAdapter>>;
   /** Resolves the executable and environment for a harness at run time. */
   runtimeFor: (harnessId: HarnessId) => Promise<HarnessRuntime>;
+  /** Creates isolated worktrees (ADR 0006). */
+  worktrees: WorktreeManager;
+  /** git runner for repo detection; injected in tests. */
+  gitRun: GitRun;
   onEvent: (event: ConversationEvent) => void;
   onConversation: (conversation: Conversation) => void;
   now?: () => number;
@@ -71,30 +80,78 @@ export class ConversationService {
     return this.deps.store.listEvents(conversationId, afterSeq);
   }
 
-  async create(input: { harnessId: HarnessId; cwd: string; title?: string | undefined }) {
+  async create(input: {
+    harnessId: HarnessId;
+    cwd: string;
+    isolation?: Isolation | undefined;
+    title?: string | undefined;
+  }) {
     if (!this.deps.adapters[input.harnessId]) {
       throw new RpcError(ErrorCode.Unsupported, `暂不支持在 ${input.harnessId} 中创建会话`);
     }
-    const info = await stat(input.cwd).catch(() => null);
+    const cwd = input.cwd.replace(/\/+$/, '');
+    const info = await stat(cwd).catch(() => null);
     if (!info?.isDirectory()) {
       throw new RpcError(ErrorCode.InvalidCwd, `工作目录不存在或不是文件夹：${input.cwd}`);
     }
+    const isolation = input.isolation ?? 'direct';
+    const id = this.newId();
+    let actualCwd = cwd;
+    let baseCwd: string | null = null;
+    if (isolation === 'worktree') {
+      try {
+        actualCwd = (await this.deps.worktrees.create(cwd, id)).cwd;
+        baseCwd = cwd;
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const code = message.includes('不是 git 仓库')
+          ? ErrorCode.NotARepo
+          : ErrorCode.WorktreeFailed;
+        throw new RpcError(code, message);
+      }
+    } else {
+      // One writer per directory: a second direct conversation on the same
+      // cwd is rejected; worktree conversations are isolated by construction.
+      const inUse = this.deps.store
+        .listConversations()
+        .some((c) => c.isolation === 'direct' && c.cwd === cwd);
+      if (inUse) {
+        throw new RpcError(
+          ErrorCode.CwdInUse,
+          '已有会话直接在此目录运行。为避免两个 Agent 同时改写同一目录，请改用 worktree 隔离。',
+        );
+      }
+    }
     const now = this.now();
     const conversation: Conversation = {
-      id: this.newId(),
+      id,
       title: input.title ?? DEFAULT_TITLE,
       harnessId: input.harnessId,
-      cwd: input.cwd,
+      cwd: actualCwd,
+      isolation,
+      baseCwd,
       externalSessionId: null,
       state: 'idle',
       lastSeq: 0,
-      preview: `工作目录 ${basename(input.cwd)}`,
+      preview: `工作目录 ${basename(actualCwd)}`,
       createdAt: now,
       updatedAt: now,
     };
     this.deps.store.insertConversation(conversation);
     this.deps.onConversation(conversation);
     return conversation;
+  }
+
+  /** What the new-conversation dialog needs to know about a directory. */
+  async inspectPath(cwd: string) {
+    const trimmed = cwd.replace(/\/+$/, '');
+    const info = await stat(trimmed).catch(() => null);
+    const exists = Boolean(info?.isDirectory());
+    const repoRoot = exists ? await findRepoRoot(this.deps.gitRun, trimmed) : null;
+    const directInUse = this.deps.store
+      .listConversations()
+      .some((c) => c.isolation === 'direct' && c.cwd === trimmed);
+    return { exists, isGitRepo: repoRoot !== null, repoRoot, directInUse };
   }
 
   send(conversationId: string, text: string) {

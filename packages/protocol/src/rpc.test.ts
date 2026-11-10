@@ -16,6 +16,7 @@ const unused = () => {
 const okHandlers: RpcHandlers = {
   'conversation.list': unused,
   'conversation.create': unused,
+  'path.inspect': unused,
   'conversation.events': unused,
   'conversation.send': unused,
   'conversation.cancel': unused,

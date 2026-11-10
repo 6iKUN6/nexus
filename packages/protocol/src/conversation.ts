@@ -18,12 +18,19 @@ export const conversationStateSchema = z.enum([
 ]);
 export type ConversationState = z.infer<typeof conversationStateSchema>;
 
+/** How a conversation's working directory is isolated (ADR 0006). */
+export const isolationSchema = z.enum(['direct', 'worktree']);
+export type Isolation = z.infer<typeof isolationSchema>;
+
 export const conversationSchema = z.object({
   id: z.string(),
   title: z.string(),
   harnessId: harnessIdSchema,
-  /** Absolute working directory the harness runs in. */
+  /** Absolute working directory the harness runs in (the worktree, when isolated). */
   cwd: z.string(),
+  isolation: isolationSchema,
+  /** The directory the user originally picked; null for direct conversations. */
+  baseCwd: z.string().nullable(),
   /** Session id inside the harness; set after the first run. */
   externalSessionId: z.string().nullable(),
   state: conversationStateSchema,

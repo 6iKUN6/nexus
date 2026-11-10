@@ -36,6 +36,9 @@ const MIGRATIONS: string[] = [
      body TEXT NOT NULL,
      PRIMARY KEY (conversation_id, seq)
    ) WITHOUT ROWID;`,
+  // M2 worktree isolation (ADR 0006); existing rows are direct conversations.
+  `ALTER TABLE conversations ADD COLUMN isolation TEXT NOT NULL DEFAULT 'direct';
+   ALTER TABLE conversations ADD COLUMN base_cwd TEXT;`,
 ];
 
 type ConversationRow = {
@@ -43,6 +46,8 @@ type ConversationRow = {
   title: string;
   harness_id: string;
   cwd: string;
+  isolation: string;
+  base_cwd: string | null;
   external_session_id: string | null;
   state: string;
   last_seq: number;
@@ -57,6 +62,8 @@ function toConversation(row: ConversationRow): Conversation {
     title: row.title,
     harnessId: row.harness_id as HarnessId,
     cwd: row.cwd,
+    isolation: row.isolation as Conversation['isolation'],
+    baseCwd: row.base_cwd,
     externalSessionId: row.external_session_id,
     state: row.state as Conversation['state'],
     lastSeq: row.last_seq,
@@ -107,14 +114,16 @@ export class Store {
     this.db
       .prepare(
         `INSERT INTO conversations
-           (id, title, harness_id, cwd, external_session_id, state, last_seq, preview, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           (id, title, harness_id, cwd, isolation, base_cwd, external_session_id, state, last_seq, preview, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         conversation.id,
         conversation.title,
         conversation.harnessId,
         conversation.cwd,
+        conversation.isolation,
+        conversation.baseCwd,
         conversation.externalSessionId,
         conversation.state,
         conversation.lastSeq,

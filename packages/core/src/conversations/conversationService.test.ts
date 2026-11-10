@@ -10,6 +10,7 @@ import type {
 } from '@nexus/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { Store } from '../store/store';
+import { GitError } from '../worktree/gitWorktree';
 import { ConversationService, ErrorCode } from './conversationService';
 
 const cleanups: Array<() => void> = [];
@@ -23,20 +24,32 @@ function tempDb(): string {
   return join(dir, 'nexus.sqlite');
 }
 
-function setup(adapter: AgentAdapter = createFakeAdapter(), dbPath = ':memory:') {
+function setup(
+  adapter: AgentAdapter = createFakeAdapter(),
+  dbPath = ':memory:',
+  worktreeCreate?: (cwd: string, id: string) => Promise<{ cwd: string; repoRoot: string }>,
+) {
   const store = new Store(dbPath);
   const events: ConversationEvent[] = [];
   const updates: Conversation[] = [];
+  const worktreeCalls: Array<{ cwd: string; id: string }> = [];
   let id = 0;
   const service = new ConversationService({
     store,
     adapters: { fake: adapter },
     runtimeFor: async () => ({ executablePath: null, env: {} }),
+    worktrees: {
+      create: async (cwd, cid) => {
+        worktreeCalls.push({ cwd, id: cid });
+        return worktreeCreate?.(cwd, cid) ?? { cwd: join(cwd, '.nexus-wt', cid), repoRoot: cwd };
+      },
+    },
+    gitRun: async () => ({ code: 0, stdout: '', stderr: '' }),
     onEvent: (e) => events.push(e),
     onConversation: (c) => updates.push(c),
     newId: () => `id-${++id}`,
   });
-  return { store, service, events, updates };
+  return { store, service, events, updates, worktreeCalls };
 }
 
 const types = (events: ConversationEvent[]) => events.map((e) => e.body.type);
@@ -123,7 +136,8 @@ describe('ConversationService', () => {
       }),
     );
     const a = await service.create({ harnessId: 'fake', cwd: tmpdir() });
-    const b = await service.create({ harnessId: 'fake', cwd: tmpdir() });
+    // Same directory only allows one direct conversation; b uses a worktree.
+    const b = await service.create({ harnessId: 'fake', cwd: tmpdir(), isolation: 'worktree' });
     service.send(a.id, 'x');
     service.send(b.id, 'y');
     await waitFor(() => events.filter((e) => e.body.type === 'text.delta').length > 4);
@@ -222,5 +236,56 @@ describe('ConversationService', () => {
     second.service.send(c.id, 'again');
     await waitFor(() => second.events.at(-1)?.body.type === 'run.completed');
     expect(resumed).toEqual([externalId]);
+  });
+});
+
+describe('isolation (ADR 0006)', () => {
+  it('creates a worktree conversation running in the worktree, remembering baseCwd', async () => {
+    const { service, worktreeCalls } = setup();
+    const c = await service.create({ harnessId: 'fake', cwd: tmpdir(), isolation: 'worktree' });
+    expect(worktreeCalls).toEqual([{ cwd: tmpdir(), id: c.id }]);
+    expect(c).toMatchObject({
+      isolation: 'worktree',
+      baseCwd: tmpdir(),
+      cwd: join(tmpdir(), '.nexus-wt', c.id),
+    });
+    expect(service.list()[0]).toMatchObject({ isolation: 'worktree', baseCwd: tmpdir() });
+  });
+
+  it('maps a non-repo worktree request to NotARepo', async () => {
+    const { service } = setup(createFakeAdapter(), ':memory:', async () => {
+      throw new GitError(`不是 git 仓库：${tmpdir()}`);
+    });
+    await expect(
+      service.create({ harnessId: 'fake', cwd: tmpdir(), isolation: 'worktree' }),
+    ).rejects.toMatchObject({ code: ErrorCode.NotARepo });
+    expect(service.list()).toHaveLength(0);
+  });
+
+  it('rejects a second direct conversation on the same cwd but allows a worktree one', async () => {
+    const { service } = setup();
+    await service.create({ harnessId: 'fake', cwd: tmpdir() });
+    await expect(service.create({ harnessId: 'fake', cwd: tmpdir() })).rejects.toMatchObject({
+      code: ErrorCode.CwdInUse,
+    });
+    await expect(service.create({ harnessId: 'fake', cwd: `${tmpdir()}/` })).rejects.toMatchObject({
+      code: ErrorCode.CwdInUse,
+    });
+    const c = await service.create({ harnessId: 'fake', cwd: tmpdir(), isolation: 'worktree' });
+    expect(c.isolation).toBe('worktree');
+  });
+
+  it('inspectPath reports existence, repo root and direct usage', async () => {
+    const { service } = setup();
+    const missing = await service.inspectPath('/definitely/not/here');
+    expect(missing).toEqual({
+      exists: false,
+      isGitRepo: false,
+      repoRoot: null,
+      directInUse: false,
+    });
+    await service.create({ harnessId: 'fake', cwd: tmpdir() });
+    const used = await service.inspectPath(tmpdir());
+    expect(used).toMatchObject({ exists: true, directInUse: true });
   });
 });

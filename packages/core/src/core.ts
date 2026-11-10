@@ -1,3 +1,6 @@
+import { mkdtempSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
 import type {
   AgentAdapter,
   HarnessId,
@@ -13,15 +16,25 @@ import { harnessEnvironment } from './env/harnessEnvironment';
 import { resolveLoginShellPath } from './env/loginShellPath';
 import { detectHarnesses, nodeDetectDeps } from './harness/detect';
 import { Store } from './store/store';
+import {
+  createWorktreeManager,
+  type GitRun,
+  realGitRun,
+  type WorktreeManager,
+} from './worktree/gitWorktree';
 
 export type CoreOptions = {
   version: string;
   /** SQLite file path, or ':memory:' in tests. */
   databasePath: string;
   adapters: Partial<Record<HarnessId, AgentAdapter>>;
+  /** Where isolated worktrees are created (ADR 0006). Defaults next to the database. */
+  worktreeDir?: string;
   /** Injected in tests; defaults to real PATH resolution + filesystem detection. */
   detectHarnesses?: (pathValue: string) => Promise<HarnessInfo[]>;
   resolvePath?: () => Promise<string>;
+  worktrees?: WorktreeManager;
+  gitRun?: GitRun;
   now?: () => number;
   newId?: () => string;
 };
@@ -83,11 +96,18 @@ export function createCore(options: CoreOptions): Core {
   };
 
   const store = new Store(options.databasePath);
+  const worktreeDir =
+    options.worktreeDir ??
+    (options.databasePath === ':memory:'
+      ? mkdtempSync(join(tmpdir(), 'nexus-worktrees-'))
+      : join(dirname(options.databasePath), 'worktrees'));
   const conversations = new ConversationService({
     store,
     adapters: options.adapters,
     now,
     ...(options.newId ? { newId: options.newId } : {}),
+    worktrees: options.worktrees ?? createWorktreeManager(worktreeDir, options.gitRun),
+    gitRun: options.gitRun ?? realGitRun,
     runtimeFor: async (harnessId): Promise<HarnessRuntime> => {
       const [path, list] = await Promise.all([loadPath(), loadHarnesses(false)]);
       const info = list.find((h) => h.id === harnessId);
@@ -106,6 +126,7 @@ export function createCore(options: CoreOptions): Core {
     'harness.list': async ({ refresh }) => ({ harnesses: await loadHarnesses(refresh) }),
     'conversation.list': () => ({ conversations: conversations.list() }),
     'conversation.create': async (params) => ({ conversation: await conversations.create(params) }),
+    'path.inspect': ({ cwd }) => conversations.inspectPath(cwd),
     'conversation.events': ({ conversationId, afterSeq }) => ({
       events: conversations.events(conversationId, afterSeq),
     }),

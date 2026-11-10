@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { conversationEventSchema, conversationSchema } from './conversation';
+import { conversationEventSchema, conversationSchema, isolationSchema } from './conversation';
 import { harnessIdSchema, harnessInfoSchema } from './harness';
 
 /**
@@ -34,9 +34,22 @@ export const rpcMethods = {
     params: z.object({
       harnessId: harnessIdSchema,
       cwd: z.string().min(1),
+      /** Defaults to direct for backwards compatibility; the UI always sends it. */
+      isolation: isolationSchema.default('direct'),
       title: z.string().trim().min(1).max(120).optional(),
     }),
     result: z.object({ conversation: conversationSchema }),
+  },
+  /** Inspects a working directory for the new-conversation dialog (ADR 0006). */
+  'path.inspect': {
+    params: z.object({ cwd: z.string().min(1) }),
+    result: z.object({
+      exists: z.boolean(),
+      isGitRepo: z.boolean(),
+      repoRoot: z.string().nullable(),
+      /** True when another conversation already runs directly in this directory. */
+      directInUse: z.boolean(),
+    }),
   },
   /** History with seq > afterSeq, in order. Used on open and to fill gaps after reconnect. */
   'conversation.events': {
