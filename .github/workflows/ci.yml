@@ -60,6 +60,17 @@ jobs:
           node-version: 24
           cache: pnpm
       - run: pnpm install --frozen-lockfile
+      # Electron ships without its binary and fetches it lazily on the first
+      # require(); electron-vite does not trigger that, so do it up front and
+      # keep the download out of the timed test run.
+      - name: Cache the Electron binary
+        uses: actions/cache@v4
+        with:
+          path: ~/Library/Caches/electron
+          key: electron-${{ runner.os }}-${{ hashFiles('pnpm-lock.yaml') }}
+      - name: Download the Electron binary
+        working-directory: packages/desktop
+        run: node -e "require('electron')"
       - run: pnpm e2e:smoke
         env:
           # Fixed location so the screenshots and dev.log below survive failure.

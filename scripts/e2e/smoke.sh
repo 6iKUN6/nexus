@@ -22,7 +22,18 @@ PORT=9333
 # Regex (pkill -f), scoped to this repo's Electron so other Electron apps are never touched.
 APP_PATTERN="$ROOT/node_modules/.pnpm/electron@[^/]*/node_modules/electron/dist/Electron.app/Contents/MacOS/Electron"
 
+# Electron ships without its binary and downloads it on the first
+# `require('electron')`; electron-vite only reads `path.txt` and gives up with
+# "Electron uninstall" when it is missing, so a fresh CI checkout must warm it.
+ensure_electron() {
+  (cd "$ROOT/packages/desktop" && node -e "require('electron')" >/dev/null 2>&1) || {
+    echo "electron binary not available; run 'pnpm --filter @nexus/desktop exec install-electron'" >&2
+    return 1
+  }
+}
+
 launch() {
+  ensure_electron || return 1
   (cd "$ROOT/packages/desktop" && NEXUS_VIBRANCY=0 NEXUS_FAKE_HARNESS=1 NEXUS_USER_DATA_DIR="$NEXUS_E2E_DIR/data" \
     npx electron-vite dev --remoteDebuggingPort $PORT >>"$NEXUS_E2E_DIR/dev.log" 2>&1 &)
   for _ in {1..60}; do curl -s localhost:$PORT/json 2>/dev/null | grep -q '"page"' && break; sleep 1; done
