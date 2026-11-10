@@ -9,7 +9,9 @@
 # Uses an isolated data dir; your real Nexus data is untouched. macOS only.
 set -euo pipefail
 ROOT=${0:A:h:h:h}
-export NEXUS_E2E_DIR=$(mktemp -d -t nexus-e2e)
+# CI passes a directory under $RUNNER_TEMP so the logs survive as an artifact;
+# locally a throwaway temp dir keeps your real Nexus data untouched.
+export NEXUS_E2E_DIR=${NEXUS_E2E_DIR:-$(mktemp -d -t nexus-e2e)}
 mkdir -p "$NEXUS_E2E_DIR/data" "$NEXUS_E2E_DIR/project"
 echo hello > "$NEXUS_E2E_DIR/project/README.md"
 # The project is a git repo so the worktree-isolation path can be exercised.
@@ -24,6 +26,11 @@ launch() {
   (cd "$ROOT/packages/desktop" && NEXUS_VIBRANCY=0 NEXUS_FAKE_HARNESS=1 NEXUS_USER_DATA_DIR="$NEXUS_E2E_DIR/data" \
     npx electron-vite dev --remoteDebuggingPort $PORT >>"$NEXUS_E2E_DIR/dev.log" 2>&1 &)
   for _ in {1..60}; do curl -s localhost:$PORT/json 2>/dev/null | grep -q '"page"' && break; sleep 1; done
+  if ! curl -s localhost:$PORT/json 2>/dev/null | grep -q '"page"'; then
+    echo "app never exposed a CDP page; last dev.log lines:" >&2
+    tail -n 60 "$NEXUS_E2E_DIR/dev.log" >&2 || true
+    return 1
+  fi
   sleep 4
   curl -s localhost:$PORT/json | python3 -c "import json,sys;print([t for t in json.load(sys.stdin) if t['type']=='page'][0]['webSocketDebuggerUrl'])"
 }

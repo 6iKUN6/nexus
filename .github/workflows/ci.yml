@@ -61,10 +61,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm e2e:smoke
+        env:
+          # Fixed location so the screenshots and dev.log below survive failure.
+          NEXUS_E2E_DIR: ${{ runner.temp }}/nexus-e2e
       - name: Upload screenshots and logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: e2e-${{ github.run_id }}
-          path: ${{ runner.temp }}/nexus-e2e*
+          path: ${{ runner.temp }}/nexus-e2e
           if-no-files-found: ignore
