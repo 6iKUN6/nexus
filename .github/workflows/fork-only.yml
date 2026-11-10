@@ -1,0 +1,20 @@
+name: PR source
+
+# Same-repository branches can be pushed by anyone with write access, which
+# bypasses the fork review boundary. This check fails such PRs so the ruleset
+# can require it: contributions must come from a fork.
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  fork-only:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Require a forked head repository
+        if: github.event.pull_request.head.repo.full_name == github.repository
+        run: |
+          echo "::error::请从 fork 提交 PR（head 分支不能位于本仓库）。"
+          exit 1
