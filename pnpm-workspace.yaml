@@ -11,3 +11,13 @@ allowBuilds:
   # node-gyp build step is never needed — not even for Electron (verified in the
   # Electron 45 utilityProcess). Explicit false keeps pnpm from warning.
   better-sqlite3: false
+
+# Dependabot flags minimatch <11.0.1 (globparts amplification DoS) and the
+# alert covers two transitive copies from electron-builder's packaging
+# toolchain, which never ships to users. Raise only those two, by dependent:
+# both packages use the named exports (`minimatch`, `Minimatch`), which v11
+# still provides. dir-compare needs the default export that v11 dropped, so it
+# keeps 3.1.5 — which is outside the advisory range anyway.
+overrides:
+  "@electron/universal>minimatch": 11.0.5
+  "app-builder-lib>minimatch": 11.0.5
