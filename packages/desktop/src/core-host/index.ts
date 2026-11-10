@@ -1,6 +1,8 @@
 import { join } from 'node:path';
 import { createClaudeAdapter } from '@nexus/adapter-claude';
+import { createCodexAdapter } from '@nexus/adapter-codex';
 import { createFakeAdapter, type FakeStep } from '@nexus/adapter-fake';
+import { createPiAdapter } from '@nexus/adapter-pi';
 import { createCore } from '@nexus/core';
 import type { AgentAdapter, HarnessId, RpcPort } from '@nexus/protocol';
 import type { MessagePortMain } from 'electron';
@@ -35,6 +37,8 @@ const demoScript = (prompt: string): FakeStep[] => [
 
 const adapters: Partial<Record<HarnessId, AgentAdapter>> = {
   'claude-code': createClaudeAdapter(),
+  codex: createCodexAdapter(),
+  pi: createPiAdapter(),
   ...(process.env.NEXUS_FAKE_HARNESS === '1'
     ? { fake: createFakeAdapter({ script: demoScript, stepDelayMs: 350 }) }
     : {}),

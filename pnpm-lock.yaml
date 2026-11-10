@@ -36,7 +36,19 @@ importers:
         specifier: workspace:*
         version: link:../../protocol
 
+  packages/adapters/codex:
+    dependencies:
+      '@nexus/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
+
   packages/adapters/fake:
+    dependencies:
+      '@nexus/protocol':
+        specifier: workspace:*
+        version: link:../../protocol
+
+  packages/adapters/pi:
     dependencies:
       '@nexus/protocol':
         specifier: workspace:*
@@ -57,9 +69,15 @@ importers:
       '@nexus/adapter-claude':
         specifier: workspace:*
         version: link:../adapters/claude
+      '@nexus/adapter-codex':
+        specifier: workspace:*
+        version: link:../adapters/codex
       '@nexus/adapter-fake':
         specifier: workspace:*
         version: link:../adapters/fake
+      '@nexus/adapter-pi':
+        specifier: workspace:*
+        version: link:../adapters/pi
       '@nexus/core':
         specifier: workspace:*
         version: link:../core

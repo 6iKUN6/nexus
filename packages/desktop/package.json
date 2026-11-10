@@ -13,7 +13,9 @@
   },
   "devDependencies": {
     "@nexus/adapter-claude": "workspace:*",
+    "@nexus/adapter-codex": "workspace:*",
     "@nexus/adapter-fake": "workspace:*",
+    "@nexus/adapter-pi": "workspace:*",
     "@nexus/core": "workspace:*",
     "@nexus/protocol": "workspace:*",
     "@nexus/ui": "workspace:*",

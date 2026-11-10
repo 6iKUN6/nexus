@@ -34,7 +34,8 @@ packages/
                    conversation, permissions, cancel, restart recovery), SQLite event log.
                    Plain Node; never imports electron. Runs in an Electron utilityProcess.
   adapters/<name>/ one package per harness, implementing AgentAdapter from protocol.
-                   fake/ (scripted, tests + dev), claude/ (Claude Agent SDK, M1).
+                   fake/ (scripted, tests + dev), claude/ (Claude Agent SDK, M1),
+                   codex/ (app-server stdio JSON-RPC, M2), pi/ (--mode rpc JSONL, M2).
   ui/              React + Arco UI. Browser-only (it must also work as a future WebUI).
   desktop/         Electron shell: main (windows/OS), preload (port hand-off), core-host, renderer entry.
 probes/            M0 throwaway scripts that record real harness behaviour. Not shipped.

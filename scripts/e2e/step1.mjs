@@ -15,9 +15,10 @@ const radios = await ev(
   `[...document.querySelectorAll('.arco-modal .arco-radio')].map(r => r.innerText.replace(/\\s+/g,' ').trim() + (r.classList.contains('arco-radio-disabled') ? ' [disabled]' : ''))`,
 );
 check(
-  '新会话对话框列出 harness（无适配器的禁用）',
-  radios.some((r) => r.includes('Fake')) &&
-    radios.some((r) => r.includes('Codex') && r.includes('[disabled]')),
+  '新会话对话框列出 harness（Codex/pi 已有适配器，均可用）',
+  radios.some((r) => r.includes('Fake') && !r.includes('[disabled]')) &&
+    radios.some((r) => r.includes('Codex') && !r.includes('[disabled]')) &&
+    radios.some((r) => r.includes('pi') && !r.includes('[disabled]')),
   JSON.stringify(radios),
 );
 await ev(
