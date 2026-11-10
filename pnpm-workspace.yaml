@@ -1,0 +1,9 @@
+packages:
+  - packages/*
+  - packages/adapters/*
+  - probes
+
+# pnpm 11 blocks dependency install scripts by default; allow only what we need.
+allowBuilds:
+  electron: true
+  electron-winstaller: false
