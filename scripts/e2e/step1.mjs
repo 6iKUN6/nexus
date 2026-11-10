@@ -97,6 +97,16 @@ check(
   ),
 );
 
+// Harness management view (D13): capabilities and auth from the adapter probe
+await click('text=Agents');
+check(
+  'Agents 视图显示能力与认证状态',
+  await ev(
+    `document.body.innerText.includes('权限卡片') && document.body.innerText.includes('已认证')`,
+  ),
+);
+await click('text=会话');
+
 // Draft persists
 await type('textarea', '未发送的草稿');
 await sleep(600);

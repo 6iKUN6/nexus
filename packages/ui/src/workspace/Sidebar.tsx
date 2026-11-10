@@ -1,6 +1,6 @@
 import { Button, Input, Radio, Tooltip } from '@arco-design/web-react';
 import { IconPlus, IconSearch } from '@arco-design/web-react/icon';
-import type { Conversation, HarnessId, HarnessInfo } from '@nexus/protocol';
+import type { Conversation, HarnessCapabilities, HarnessInfo } from '@nexus/protocol';
 import { type Ref, useState } from 'react';
 import { NexusMark } from '../brand/NexusMark';
 import { PERSONAS } from '../model/types';
@@ -123,7 +123,11 @@ export function Sidebar(props: SidebarProps) {
             )}
           </>
         ) : (
-          <AgentsView conversations={props.conversations} onOpen={props.onOpen} />
+          <AgentsView
+            conversations={props.conversations}
+            harnesses={props.harnesses}
+            onOpen={props.onOpen}
+          />
         )}
       </nav>
 
@@ -240,26 +244,91 @@ function ConversationRow({
   );
 }
 
+const CAPABILITY_LABELS: Array<[keyof HarnessCapabilities, string]> = [
+  ['streaming', '流式'],
+  ['permissions', '权限卡片'],
+  ['cancel', '取消'],
+  ['interrupt', '中断注入'],
+  ['resume', '会话续传'],
+  ['fork', '分支'],
+  ['mcp', 'MCP'],
+  ['usage', '用量统计'],
+];
+
+const AUTH_LABEL: Record<HarnessInfo['auth'], string> = {
+  unknown: '认证状态未知',
+  authenticated: '已认证',
+  unauthenticated: '未认证',
+};
+
+/** Read-only harness management (D13): detection, auth, capabilities, limitations. */
 function AgentsView({
   conversations,
+  harnesses,
   onOpen,
 }: {
   conversations: Conversation[];
+  harnesses: HarnessInfo[] | null;
   onOpen: (id: string) => void;
 }) {
-  const ids = [...new Set(conversations.map((c) => c.harnessId))];
-  if (ids.length === 0)
-    return <p className="px-2 py-4 text-center text-xs text-fg-3">还没有会话</p>;
+  const visible = (harnesses ?? []).filter((h) => h.id !== 'dsh');
+  if (!harnesses) return <p className="px-2 py-4 text-center text-xs text-fg-3">检测中…</p>;
   return (
     <>
-      {ids.map((id: HarnessId) => {
-        const owned = conversations.filter((c) => c.harnessId === id);
+      {visible.map((h) => {
+        const owned = conversations.filter((c) => c.harnessId === h.id);
         return (
-          <section key={id}>
-            <div className="flex items-center gap-2 px-2 pt-3 pb-1">
-              <AgentAvatar agent={id} size="sm" />
-              <span className="text-[13px] font-semibold text-fg-1">{PERSONAS[id].name}</span>
-              <span className="ml-auto text-[11px] text-fg-3">{owned.length} 个会话</span>
+          <section key={h.id} className="mb-1 px-2 pt-3">
+            <div className="flex items-center gap-2 pb-1">
+              <AgentAvatar agent={h.id} size="sm" />
+              <span className="text-[13px] font-semibold text-fg-1">{PERSONAS[h.id].name}</span>
+              <span className="ml-auto text-[11px] text-fg-3">
+                {h.chatSupported ? `${owned.length} 个会话` : 'M2'}
+              </span>
+            </div>
+            <div className="rounded-lg border border-line-1 bg-elevated px-2.5 py-2">
+              <dl className="m-0 grid grid-cols-[52px_1fr] gap-x-2 gap-y-1 text-[11px]">
+                <dt className="text-fg-3">状态</dt>
+                <dd className="m-0 text-fg-1">
+                  {!h.installed ? '未安装' : `${h.version ?? '已安装'} · ${AUTH_LABEL[h.auth]}`}
+                </dd>
+                {h.executablePath && (
+                  <>
+                    <dt className="text-fg-3">路径</dt>
+                    <dd
+                      className="nx-selectable m-0 truncate font-mono text-fg-2"
+                      title={h.executablePath}
+                    >
+                      {h.executablePath}
+                    </dd>
+                  </>
+                )}
+                {h.capabilities && (
+                  <>
+                    <dt className="text-fg-3">能力</dt>
+                    <dd className="m-0 flex flex-wrap gap-1">
+                      {CAPABILITY_LABELS.map(([key, label]) => (
+                        <span
+                          key={key}
+                          className={`rounded px-1 py-px ${
+                            h.capabilities?.[key]
+                              ? 'bg-tint-2 text-fg-1'
+                              : 'bg-tint-1 text-fg-4 line-through'
+                          }`}
+                        >
+                          {label}
+                        </span>
+                      ))}
+                    </dd>
+                  </>
+                )}
+              </dl>
+              {h.problem && <p className="m-0 mt-1.5 text-[11px] text-warn">{h.problem}</p>}
+              {(h.limitations ?? []).map((limitation) => (
+                <p key={limitation} className="m-0 mt-1 text-[11px] leading-relaxed text-fg-3">
+                  · {limitation}
+                </p>
+              ))}
             </div>
             {owned.map((c) => (
               <SidebarRow key={c.id} selected={false} onClick={() => onOpen(c.id)}>

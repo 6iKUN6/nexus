@@ -13,6 +13,18 @@ export type HarnessId = z.infer<typeof harnessIdSchema>;
 export const authStatusSchema = z.enum(['unknown', 'authenticated', 'unauthenticated']);
 export type AuthStatus = z.infer<typeof authStatusSchema>;
 
+export const harnessCapabilitiesSchema = z.object({
+  streaming: z.boolean(),
+  permissions: z.boolean(),
+  cancel: z.boolean(),
+  interrupt: z.boolean(),
+  resume: z.boolean(),
+  fork: z.boolean(),
+  mcp: z.boolean(),
+  usage: z.boolean(),
+});
+export type HarnessCapabilities = z.infer<typeof harnessCapabilitiesSchema>;
+
 export const harnessInfoSchema = z.object({
   id: harnessIdSchema,
   displayName: z.string(),
@@ -25,17 +37,8 @@ export const harnessInfoSchema = z.object({
   problem: z.string().nullable(),
   /** Nexus has an adapter for it, so conversations can be created. */
   chatSupported: z.boolean(),
+  /** Adapter-reported capabilities and known gaps; absent when no adapter exists. */
+  capabilities: harnessCapabilitiesSchema.optional(),
+  limitations: z.array(z.string()).optional(),
 });
 export type HarnessInfo = z.infer<typeof harnessInfoSchema>;
-
-export const harnessCapabilitiesSchema = z.object({
-  streaming: z.boolean(),
-  permissions: z.boolean(),
-  cancel: z.boolean(),
-  interrupt: z.boolean(),
-  resume: z.boolean(),
-  fork: z.boolean(),
-  mcp: z.boolean(),
-  usage: z.boolean(),
-});
-export type HarnessCapabilities = z.infer<typeof harnessCapabilitiesSchema>;

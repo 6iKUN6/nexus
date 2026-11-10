@@ -76,11 +76,28 @@ export function createCore(options: CoreOptions): Core {
     if (refresh || !harnesses) {
       if (refresh) pathValue = null;
       const attempt = loadPath().then(async (path) => {
-        const detected = (await detect(path)).map((h) => ({
-          ...h,
-          chatSupported: Boolean(options.adapters[h.id]) && h.installed,
-        }));
-        return options.adapters.fake ? [...detected, FAKE_HARNESS] : detected;
+        const detected = await detect(path);
+        const all = options.adapters.fake ? [...detected, FAKE_HARNESS] : detected;
+        return Promise.all(
+          all.map(async (h) => {
+            const adapter = options.adapters[h.id];
+            if (!adapter) return h;
+            const base = { ...h, chatSupported: h.installed };
+            try {
+              const probe = await adapter.probe();
+              return {
+                ...base,
+                version: h.version ?? probe.version,
+                auth: probe.auth !== 'unknown' ? probe.auth : h.auth,
+                capabilities: probe.capabilities,
+                limitations: probe.limitations,
+              };
+            } catch {
+              // A failing probe must not hide detection results.
+              return base;
+            }
+          }),
+        );
       });
       harnesses = attempt;
       // Do not cache failures; the next call retries.

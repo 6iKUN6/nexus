@@ -86,6 +86,23 @@ describe('core', () => {
     expect(harnesses.find((h) => h.id === 'fake')).toMatchObject({ chatSupported: true });
   });
 
+  it('merges adapter probe results (capabilities, limitations, auth) into harness info', async () => {
+    const codex: HarnessInfo = { ...pi, id: 'codex', displayName: 'Codex', binaryName: 'codex' };
+    const { client } = connect(async () => [pi, codex], { pi: createFakeAdapter() });
+    const { harnesses } = await client.request('harness.list', {});
+    const probed = harnesses.find((h) => h.id === 'pi');
+    expect(probed).toMatchObject({
+      chatSupported: true,
+      version: '0.84.2', // detection wins over the adapter's static probe
+      auth: 'authenticated', // adapter probe wins over 'unknown'
+      limitations: ['Scripted responses only.'],
+    });
+    expect(probed?.capabilities).toMatchObject({ streaming: true, permissions: true });
+    // No adapter: chat unsupported and no capabilities are reported.
+    expect(harnesses.find((h) => h.id === 'codex')).toMatchObject({ chatSupported: false });
+    expect(harnesses.find((h) => h.id === 'codex')?.capabilities).toBeUndefined();
+  });
+
   it('runs a conversation end to end over RPC and pushes events to the client', async () => {
     const { client } = connect(async () => [], { fake: createFakeAdapter() });
     const pushed: ConversationEvent[] = [];
