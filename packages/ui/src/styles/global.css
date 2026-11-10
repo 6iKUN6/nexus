@@ -1,0 +1,91 @@
+/*
+ * Layer order matters: Arco ships unlayered CSS, which would beat every
+ * Tailwind utility. Putting it in its own layer below `utilities` lets
+ * utilities win. Tailwind preflight (base reset) is intentionally not
+ * imported; Arco provides its own base styles. The Apple theme files are
+ * unlayered so they override Arco's variables and component defaults.
+ */
+@layer theme, arco, components, utilities;
+
+@import "tailwindcss/theme.css" layer(theme);
+@import "@arco-design/web-react/dist/css/arco.css" layer(arco);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "../theme/applePalette.css";
+@import "../theme/appleTheme.css";
+
+@source "../";
+
+/*
+ * Expose design tokens as Tailwind colors. Names must NOT reuse Arco's
+ * own variable names (e.g. --color-bg-1), or the variables become circular.
+ * Usage: bg-surface-2, text-fg-2, border-line-2, text-brand …
+ */
+@theme inline {
+  --color-surface-1: var(--color-bg-1);
+  --color-surface-2: var(--color-bg-2);
+  --color-surface-3: var(--color-bg-3);
+  --color-elevated: var(--nx-elevated);
+  --color-sidebar: var(--nx-sidebar);
+  --color-titlebar: var(--nx-titlebar);
+  --color-bubble-in: var(--nx-bubble-in);
+  --color-bubble-out: var(--nx-bubble-out);
+  --color-on-accent: var(--nx-on-accent);
+  --color-tint-1: var(--color-fill-1);
+  --color-tint-2: var(--color-fill-2);
+  --color-tint-3: var(--color-fill-3);
+  --color-line-1: var(--color-border-1);
+  --color-line-2: var(--color-border-2);
+  --color-line-3: var(--color-border-3);
+  --color-fg-1: var(--color-text-1);
+  --color-fg-2: var(--color-text-2);
+  --color-fg-3: var(--color-text-3);
+  --color-fg-4: var(--color-text-4);
+  --color-brand: rgb(var(--primary-6));
+  --color-brand-soft: var(--color-primary-light-1);
+  --color-ok: rgb(var(--success-6));
+  --color-ok-soft: var(--color-success-light-1);
+  --color-warn: rgb(var(--warning-6));
+  --color-warn-soft: var(--color-warning-light-1);
+  --color-bad: rgb(var(--danger-6));
+  --color-bad-soft: var(--color-danger-light-1);
+  --color-sys-orange: var(--nx-orange);
+  --color-sys-purple: var(--nx-purple);
+  --color-sys-teal: var(--nx-teal);
+  --color-sys-indigo: var(--nx-indigo);
+  --color-sys-gray: var(--nx-gray);
+  --color-brand-ink: var(--nx-brand-ink);
+  --color-brand-mint: var(--nx-brand-mint);
+  --color-brand-mark: var(--nx-brand-mark);
+  --shadow-mac: var(--nx-shadow);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--color-bg-1);
+  color: var(--color-text-1);
+}
+
+@keyframes nx-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.35;
+  }
+}
+.nx-pulse {
+  animation: nx-pulse 1.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .nx-pulse {
+    animation: none;
+  }
+}

@@ -1,0 +1,157 @@
+/*
+ * Apple-style surfaces, text and shape for Arco (ADR 0004).
+ * Values follow macOS semantic colors (windowBackground, labelColor,
+ * separatorColor …). Unlayered so they override arco.css.
+ */
+
+body {
+  color-scheme: light;
+  /* Surfaces */
+  --color-bg-1: #ffffff; /* content area */
+  --color-bg-2: #ffffff; /* cards, popovers */
+  --color-bg-3: #f5f5f7;
+  --color-bg-4: #ffffff;
+  --color-bg-5: #ffffff;
+  --color-bg-white: #ffffff;
+  --nx-sidebar: #f2f2f4; /* used when native vibrancy is unavailable */
+  --nx-titlebar: #f6f6f6;
+  --nx-elevated: #ffffff;
+  --nx-bubble-in: #e9e9eb;
+  --nx-bubble-out: rgb(var(--primary-6));
+  --nx-on-accent: #ffffff;
+  --nx-shadow: 0 0 0 0.5px rgba(0, 0, 0, 0.12), 0 1px 3px rgba(0, 0, 0, 0.06);
+
+  /* Text */
+  --color-text-1: rgba(0, 0, 0, 0.85);
+  --color-text-2: rgba(0, 0, 0, 0.6);
+  --color-text-3: rgba(0, 0, 0, 0.42);
+  --color-text-4: rgba(0, 0, 0, 0.25);
+
+  /* Fills and separators */
+  --color-fill-1: rgba(0, 0, 0, 0.03);
+  --color-fill-2: rgba(0, 0, 0, 0.05);
+  --color-fill-3: rgba(0, 0, 0, 0.08);
+  --color-fill-4: rgba(0, 0, 0, 0.12);
+  --color-border-1: rgba(0, 0, 0, 0.06);
+  --color-border-2: rgba(0, 0, 0, 0.1);
+  --color-border-3: rgba(0, 0, 0, 0.15);
+  --color-border-4: rgba(0, 0, 0, 0.22);
+
+  /* Extra system colors (avatars, accents) */
+  --nx-orange: rgb(255, 149, 0);
+  --nx-purple: rgb(175, 82, 222);
+  --nx-teal: rgb(48, 176, 199);
+  --nx-indigo: rgb(88, 86, 214);
+  --nx-gray: rgb(142, 142, 147);
+
+  /* Brand (assets/logos/README.md): ink #172924, mint #70E3B0, paper #F4F5EF */
+  --nx-brand-ink: #172924;
+  --nx-brand-mint: #70e3b0;
+  --nx-brand-mark: #172924; /* mark on the current surface */
+
+  /* Shape */
+  --border-radius-small: 5px;
+  --border-radius-medium: 7px;
+  --border-radius-large: 10px;
+}
+
+body[arco-theme="dark"] {
+  /* Native scrollbars, form controls and selection follow the theme. */
+  color-scheme: dark;
+  --color-bg-1: #1e1e1e;
+  --color-bg-2: #2a2a2c;
+  --color-bg-3: #262628;
+  --color-bg-4: #313133;
+  --color-bg-5: #3a3a3c;
+  --color-bg-white: #2a2a2c;
+  --nx-sidebar: #252527;
+  --nx-titlebar: #2a2a2a;
+  --nx-elevated: #2c2c2e;
+  --nx-bubble-in: #3a3a3c;
+  --nx-shadow: 0 0 0 0.5px rgba(255, 255, 255, 0.1), 0 1px 3px rgba(0, 0, 0, 0.3);
+
+  --color-text-1: rgba(255, 255, 255, 0.88);
+  --color-text-2: rgba(255, 255, 255, 0.62);
+  --color-text-3: rgba(255, 255, 255, 0.42);
+  --color-text-4: rgba(255, 255, 255, 0.25);
+
+  --color-fill-1: rgba(255, 255, 255, 0.04);
+  --color-fill-2: rgba(255, 255, 255, 0.07);
+  --color-fill-3: rgba(255, 255, 255, 0.1);
+  --color-fill-4: rgba(255, 255, 255, 0.14);
+  --color-border-1: rgba(255, 255, 255, 0.06);
+  --color-border-2: rgba(255, 255, 255, 0.1);
+  --color-border-3: rgba(255, 255, 255, 0.15);
+  --color-border-4: rgba(255, 255, 255, 0.22);
+
+  --nx-orange: rgb(255, 159, 10);
+  --nx-purple: rgb(191, 90, 242);
+  --nx-teal: rgb(64, 200, 224);
+  --nx-indigo: rgb(94, 92, 230);
+  --nx-gray: rgb(152, 152, 157);
+
+  --nx-brand-mark: #f4f5ef;
+}
+
+body {
+  font-family:
+    -apple-system, BlinkMacSystemFont, "SF Pro Text", "PingFang SC", "Helvetica Neue",
+    "Microsoft YaHei", sans-serif;
+  font-size: 13px;
+  line-height: 1.45;
+  letter-spacing: -0.003em;
+  -webkit-font-smoothing: antialiased;
+  user-select: none;
+  cursor: default;
+}
+
+/* Text the user may want to copy stays selectable. */
+.nx-selectable,
+.arco-textarea,
+.arco-input {
+  user-select: text;
+  cursor: auto;
+}
+
+/* --- Arco component tuning toward macOS controls --- */
+.arco-btn {
+  font-weight: 500;
+  font-size: 13px;
+}
+.arco-btn-size-small {
+  font-size: 12px;
+}
+.arco-btn-primary:not(.arco-btn-disabled) {
+  box-shadow: 0 0.5px 1px rgba(0, 0, 0, 0.15);
+}
+.arco-input-inner-wrapper,
+.arco-textarea {
+  font-size: 13px;
+}
+.arco-radio-group-button {
+  padding: 2px;
+  background: var(--color-fill-3);
+  border-radius: var(--border-radius-medium);
+}
+.arco-radio-button {
+  font-size: 12px;
+  border-radius: var(--border-radius-small);
+}
+.arco-radio-button.arco-radio-checked {
+  background: var(--nx-elevated);
+  box-shadow: var(--nx-shadow);
+}
+.arco-tooltip-content {
+  font-size: 12px;
+}
+
+/* Native macOS vibrancy: the window is transparent and the sidebar shows the blur through. */
+html[data-vibrancy] body,
+html[data-vibrancy] #root,
+html[data-vibrancy] .arco-layout {
+  background: transparent;
+}
+html[data-vibrancy] body {
+  --nx-sidebar: transparent;
+  --nx-titlebar: transparent;
+}

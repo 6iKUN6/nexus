@@ -1,0 +1,32 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1060" viewBox="0 0 1600 1060">
+<rect width="1600" height="1060" fill="#F4F5EF"/>
+<text x="76" y="66" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="600" fill="#172924" letter-spacing="3">NEXUS / IDENTITY STUDY</text>
+<text x="1300" y="66" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#172924" letter-spacing="2">01 — RELAY</text>
+<path d="M76 94H1524" stroke="#CDD5CB"/>
+<g transform="translate(245 152) scale(1.35)"><g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"><path stroke="#172924" d="M64 192V64L112 112"/><path stroke="#172924" d="M144 144L192 192V64"/></g></g>
+<text x="620" y="385" font-family="Arial, Helvetica, sans-serif" font-size="178" font-weight="600" fill="#172924" letter-spacing="-8">Nexus</text>
+<text x="627" y="440" font-family="Arial, Helvetica, sans-serif" font-size="24" font-weight="400" fill="#607169" >A workspace for connected agents.</text>
+<text x="76" y="550" font-family="Arial, Helvetica, sans-serif" font-size="14" font-weight="400" fill="#607169" letter-spacing="2">TWO AGENTS. ONE CONTINUOUS TASK.</text>
+<rect x="76" y="584" width="460" height="364" rx="24" fill="#172924"/>
+<text x="102" y="622" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="400" fill="#B5C8BF" letter-spacing="2">01 / APP ICON</text>
+<rect x="213" y="663" width="186" height="186" rx="43" fill="#70E3B0"/>
+<g transform="translate(213 663) scale(.7265625)"><g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"><path stroke="#172924" d="M64 192V64L112 112"/><path stroke="#172924" d="M144 144L192 192V64"/></g></g>
+<text x="233" y="906" font-family="Arial, Helvetica, sans-serif" font-size="20" font-weight="600" fill="#F4F5EF" >Nexus</text>
+<rect x="558" y="584" width="460" height="364" rx="24" fill="#E6EBE1"/>
+<text x="584" y="622" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="400" fill="#607169" letter-spacing="2">02 / SMALL &amp; SIMPLE</text>
+<g transform="translate(666 659) scale(.95)"><g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"><path stroke="#172924" d="M64 192V64L112 112"/><path stroke="#172924" d="M144 144L192 192V64"/></g></g>
+<text x="668" y="906" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#607169" >One color. Clear at every scale.</text>
+<rect x="1040" y="584" width="484" height="364" rx="24" fill="#FFFFFF"/>
+<text x="1066" y="622" font-family="Arial, Helvetica, sans-serif" font-size="13" font-weight="400" fill="#607169" letter-spacing="2">03 / IN YOUR WORKSPACE</text>
+<rect x="1074" y="685" width="416" height="140" rx="15" fill="#F4F5EF" stroke="#D8DED5"/>
+<g transform="translate(1087 699) scale(.24)"><g fill="none" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"><path stroke="#172924" d="M64 192V64L112 112"/><path stroke="#172924" d="M144 144L192 192V64"/></g></g>
+<text x="1160" y="740" font-family="Arial, Helvetica, sans-serif" font-size="25" font-weight="600" fill="#172924" >Nexus</text>
+<circle cx="1449" cy="731" r="5" fill="#258764"/>
+<path d="M1074 760H1490" stroke="#D8DED5"/>
+<text x="1100" y="797" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="600" fill="#172924" >Login fix</text>
+<text x="1238" y="797" font-family="Arial, Helvetica, sans-serif" font-size="15" font-weight="400" fill="#69786E" >Code review</text>
+<text x="1066" y="906" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#607169" >Chat, collaborate, hand off.</text>
+<text x="76" y="1018" font-family="Arial, Helvetica, sans-serif" font-size="18" font-weight="400" fill="#172924" >Connection is the form. Handoff is the gap.</text>
+<circle cx="1309" cy="1010" r="11" fill="#172924"/><circle cx="1343" cy="1010" r="11" fill="#70E3B0"/><circle cx="1377" cy="1010" r="11" fill="#E6EBE1"/>
+<text x="1420" y="1017" font-family="Arial, Helvetica, sans-serif" font-size="16" font-weight="400" fill="#607169" >v0.1</text>
+</svg>
