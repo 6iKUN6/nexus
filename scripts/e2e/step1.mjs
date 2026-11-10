@@ -9,6 +9,8 @@ check('首次启动显示欢迎页', true);
 // Create a conversation with the fake harness
 await click('text=新会话 ⌘T');
 await until(`!!document.querySelector('.arco-modal')`, 'modal');
+// The harness list arrives over RPC after core spawns; wait for it, don't assume.
+await until(`document.querySelectorAll('.arco-modal .arco-radio').length >= 4`, 'harness list');
 const radios = await ev(
   `[...document.querySelectorAll('.arco-modal .arco-radio')].map(r => r.innerText.replace(/\\s+/g,' ').trim() + (r.classList.contains('arco-radio-disabled') ? ' [disabled]' : ''))`,
 );

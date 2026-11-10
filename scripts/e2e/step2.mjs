@@ -20,6 +20,9 @@ check(
 check(
   '重启后未发送的草稿还在',
   (await ev(`document.querySelector('textarea').value`)) === '未发送的草稿',
+  await ev(
+    `JSON.stringify({ value: document.querySelector('textarea')?.value ?? null, saved: localStorage.getItem('nexus.ui.v1') })`,
+  ),
 );
 
 // Start a run, wait for the permission prompt, then hard-kill (simulated crash).
