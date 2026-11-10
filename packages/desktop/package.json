@@ -1,0 +1,31 @@
+{
+  "name": "@nexus/desktop",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Nexus desktop shell",
+  "main": "./out/main/index.js",
+  "scripts": {
+    "dev": "electron-vite dev",
+    "build": "electron-vite build",
+    "preview": "electron-vite preview",
+    "pack:dir": "electron-vite build && electron-builder --mac --dir",
+    "typecheck": "tsc -p tsconfig.node.json && tsc -p tsconfig.web.json"
+  },
+  "devDependencies": {
+    "@nexus/adapter-claude": "workspace:*",
+    "@nexus/adapter-fake": "workspace:*",
+    "@nexus/core": "workspace:*",
+    "@nexus/protocol": "workspace:*",
+    "@nexus/ui": "workspace:*",
+    "@tailwindcss/vite": "~4.3.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.2.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "electron": "^45.2.3",
+    "electron-builder": "^26.18.0",
+    "electron-vite": "^6.0.0",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "vite": "^8.3.6"
+  }
+}
