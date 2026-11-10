@@ -6,6 +6,7 @@ import {
   ipcMain,
   MessageChannelMain,
   nativeTheme,
+  session,
   shell,
   type UtilityProcess,
   utilityProcess,
@@ -180,7 +181,10 @@ app.on('before-quit', (event) => {
   const timer = setTimeout(() => child.kill(), 3_000);
   child.once('exit', () => {
     clearTimeout(timer);
-    app.quit();
+    // Chromium commits localStorage on a slow internal timer; without this a
+    // graceful quit can lose the last seconds of UI state (tabs, drafts).
+    session.defaultSession.flushStorageData();
+    setTimeout(() => app.quit(), 300);
   });
   child.postMessage({ type: 'nexus:shutdown' });
 });
