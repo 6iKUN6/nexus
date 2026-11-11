@@ -12,6 +12,7 @@ import {
 } from '@nexus/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCore } from '../core';
+import { Store } from '../store/store';
 import type { GitRun } from '../worktree/gitWorktree';
 
 /**
@@ -304,5 +305,106 @@ describe('handoff (M4)', () => {
       )
       .toMatchObject({ state: 'needs_reconciliation' });
     await second.core.dispose();
+  });
+});
+
+describe('handoff fault injection (D20)', () => {
+  it('after a crash while stopping the source, the handoff is aborted and the owner stays', async () => {
+    const dbPath = join(repoDir(), 'nexus.sqlite');
+    const first = connect({ databasePath: dbPath });
+    const conversation = await createConversation(first.client);
+    await first.core.dispose();
+
+    // Simulate a crash mid-prepare: the row exists in stopping_source, the
+    // package was never frozen, and ownership never changed.
+    const store = new Store(dbPath);
+    store.insertHandoff({
+      id: 'crash-mid-stop',
+      conversationId: conversation.id,
+      state: 'stopping_source',
+      fromHarnessId: 'fake',
+      toHarnessId: 'codex',
+      package: null,
+      problem: null,
+      version: 1,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+    store.close();
+
+    const second = connect({ databasePath: dbPath });
+    const listed = (await second.client.request('conversation.list', {})).conversations[0];
+    expect(listed).toMatchObject({ harnessId: 'fake', ownerVersion: 1 });
+    await expect
+      .poll(
+        async () => {
+          const { events } = await second.client.request('conversation.events', {
+            conversationId: conversation.id,
+          });
+          return events.some((e) => e.body.type === 'handoff' && e.body.state === 'aborted');
+        },
+        { timeout: 5000 },
+      )
+      .toBe(true);
+    // The conversation is usable again under the original owner.
+    await second.client.request('conversation.send', {
+      conversationId: conversation.id,
+      text: '继续',
+    });
+    await expect
+      .poll(
+        async () => {
+          const { events } = await second.client.request('conversation.events', {
+            conversationId: conversation.id,
+          });
+          return events.some((e) => e.body.type === 'run.completed');
+        },
+        { timeout: 5000 },
+      )
+      .toBe(true);
+    await second.core.dispose();
+  });
+
+  it('a receiver that cannot start after commit ends in needs_reconciliation and keeps the receiver', async () => {
+    const failingCodex: AgentAdapter = {
+      ...createFakeAdapter(),
+      harnessId: 'codex',
+      createSession: async () => {
+        throw new Error('spawn codex ENOENT');
+      },
+    };
+    const { client } = connect({ codex: failingCodex });
+    const conversation = await createConversation(client);
+    const { handoff } = await prepare(client, conversation.id);
+    await client.request('handoff.commit', { handoffId: handoff.id, version: handoff.version });
+
+    // The brief run fails to start; per plan §7 the receiver keeps ownership
+    // and the user is asked to reconcile — nothing is rolled back silently.
+    await expect
+      .poll(
+        async () => {
+          const { events } = await client.request('conversation.events', {
+            conversationId: conversation.id,
+          });
+          return events.some((e) => e.body.type === 'run.failed');
+        },
+        { timeout: 5000 },
+      )
+      .toBe(true);
+    await expect
+      .poll(
+        async () => {
+          const { events } = await client.request('conversation.events', {
+            conversationId: conversation.id,
+          });
+          return events.some(
+            (e) => e.body.type === 'handoff' && e.body.state === 'needs_reconciliation',
+          );
+        },
+        { timeout: 5000 },
+      )
+      .toBe(true);
+    const listed = (await client.request('conversation.list', {})).conversations[0];
+    expect(listed).toMatchObject({ harnessId: 'codex', ownerVersion: 2, state: 'failed' });
   });
 });

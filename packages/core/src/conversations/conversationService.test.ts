@@ -8,7 +8,7 @@ import type {
   Conversation,
   ConversationEvent,
 } from '@nexus/protocol';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from '../store/store';
 import { GitError } from '../worktree/gitWorktree';
 import { ConversationService, ErrorCode } from './conversationService';
@@ -391,5 +391,92 @@ describe('handoff support (M4)', () => {
     service.releaseHold(c.id);
     await waitFor(() => events.some((e) => e.body.type === 'run.completed'));
     expect(service.queuedCount(c.id)).toBe(0);
+  });
+});
+
+describe('fault injection (D20)', () => {
+  it('a store failure mid-run frees the slot, and the open run is closed honestly on restart', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    const dbPath = tempDb();
+    const { store, service, events } = setup(createFakeAdapter(), dbPath, undefined, 1);
+    // The log breaks halfway through the first run and stays broken for the
+    // terminal event too; it recovers afterwards.
+    const original = store.appendEvent.bind(store);
+    const failedTypes = new Set<string>();
+    store.appendEvent = (conversationId, body, patch, now) => {
+      if (
+        (body.type === 'text.delta' || body.type === 'run.failed') &&
+        !failedTypes.has(body.type)
+      ) {
+        failedTypes.add(body.type);
+        throw new Error('disk full');
+      }
+      return original(conversationId, body, patch, now);
+    };
+    const c = await service.create({ harnessId: 'fake', cwd: tmpdir() });
+    service.send(c.id, 'one');
+    await waitFor(() => failedTypes.size === 2);
+
+    // The global slot was freed: a second prompt still runs to completion.
+    service.send(c.id, 'two');
+    await waitFor(() => events.some((e) => e.body.type === 'run.completed'));
+    expect(service.list()[0]?.state).toBe('idle');
+
+    // The failed run was never mislabelled: it stayed open in the log, so the
+    // next boot closes it as interrupted even though the conversation itself
+    // recovered to idle meanwhile.
+    await service.dispose();
+    store.close();
+    const second = setup(createFakeAdapter(), dbPath);
+    expect(second.service.recoverInterruptedRuns()).toBe(1);
+    const codes = second.service
+      .events(c.id, 0)
+      .flatMap((e) => (e.body.type === 'run.failed' ? [e.body.error.code] : []));
+    expect(codes).toEqual(['interrupted']);
+    expect(second.service.list()[0]?.state).toBe('idle');
+    second.store.close();
+  });
+
+  it('send fails loudly when the store cannot record the message', async () => {
+    const { store, service, events } = setup();
+    const c = await service.create({ harnessId: 'fake', cwd: tmpdir() });
+    const original = store.appendEvent.bind(store);
+    store.appendEvent = () => {
+      throw new Error('disk full');
+    };
+    expect(() => service.send(c.id, 'hi')).toThrow('本地数据库写入失败');
+
+    // Nothing half-started: the next send works once the store recovers.
+    store.appendEvent = original;
+    service.send(c.id, 'hi');
+    await waitFor(() => events.some((e) => e.body.type === 'run.completed'));
+  });
+
+  it('a graceful shutdown mid-run records no terminal event; the next boot marks it interrupted', async () => {
+    const dbPath = tempDb();
+    const first = setup(
+      createFakeAdapter({ script: [{ kind: 'permission', description: 'x' }] }),
+      dbPath,
+    );
+    const c = await first.service.create({ harnessId: 'fake', cwd: tmpdir() });
+    first.service.send(c.id, 'one');
+    await waitFor(() => first.events.some((e) => e.body.type === 'permission.requested'));
+    await first.service.dispose();
+    // Disposing aborts the adapter, which emits a cancelled terminal event; it
+    // must be dropped, or an interrupted run would read as a clean cancel.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const stored = first.store.listEvents(c.id, 0);
+    expect(
+      stored.some((e) => e.body.type === 'run.completed' || e.body.type === 'run.failed'),
+    ).toBe(false);
+    first.store.close();
+
+    const second = setup(createFakeAdapter(), dbPath);
+    expect(second.service.recoverInterruptedRuns()).toBe(1);
+    const codes = second.service
+      .events(c.id, 0)
+      .flatMap((e) => (e.body.type === 'run.failed' ? [e.body.error.code] : []));
+    expect(codes).toEqual(['interrupted']);
+    second.store.close();
   });
 });

@@ -65,6 +65,19 @@ type Live = {
 const PREVIEW_MAX = 80;
 const DEFAULT_TITLE = '新会话';
 
+/**
+ * A store write that failed. Tagged so `run()` can tell "the harness stream
+ * broke" (keep recording) from "the log itself broke" — in that case the user
+ * can no longer see what the harness is doing, so the run is stopped instead.
+ * The message is user-facing: it is what the UI shows when a send fails.
+ */
+class StoreWriteError extends Error {
+  constructor(cause: unknown) {
+    super(`本地数据库写入失败：${cause instanceof Error ? cause.message : String(cause)}`);
+    this.name = 'StoreWriteError';
+  }
+}
+
 export class ConversationService {
   private readonly live = new Map<string, Live>();
   private readonly now: () => number;
@@ -223,7 +236,11 @@ export class ConversationService {
       createdAt: now,
       updatedAt: now,
     };
-    this.deps.store.insertConversation(conversation);
+    try {
+      this.deps.store.insertConversation(conversation);
+    } catch (error) {
+      throw new StoreWriteError(error);
+    }
     this.deps.onConversation(conversation);
     return conversation;
   }
@@ -327,20 +344,23 @@ export class ConversationService {
   /**
    * After a restart nothing is running. Any run that started (or was queued)
    * without a terminal event is closed as interrupted, never re-executed:
-   * it may already have changed files (plan §10.5).
+   * it may already have changed files (plan §10.5). Every conversation is
+   * scanned, not just busy ones — a run left open by a storage failure can sit
+   * behind a later, healthy run that already flipped the state back to idle.
    */
   recoverInterruptedRuns(): number {
     let recovered = 0;
     for (const conversation of this.deps.store.listConversations()) {
-      if (conversation.state !== 'running' && conversation.state !== 'waiting_user') {
-        continue;
-      }
       const open = new Set<string>();
       for (const { body } of this.deps.store.listEvents(conversation.id, 0)) {
         if (body.type === 'run.queued' || body.type === 'run.started') open.add(body.runId);
         if (body.type === 'run.completed' || body.type === 'run.failed') open.delete(body.runId);
       }
+      const staleBusy = conversation.state === 'running' || conversation.state === 'waiting_user';
       for (const runId of open) {
+        // Only a stale busy state is flipped to failed; a conversation whose
+        // later runs finished fine keeps its state — the interruption is still
+        // visible as an event in the timeline.
         this.append(
           conversation.id,
           {
@@ -351,11 +371,13 @@ export class ConversationService {
               message: '应用退出时这次运行被中断，没有自动重试。请检查工作目录后再继续。',
             },
           },
-          { state: 'failed' },
+          staleBusy
+            ? { state: 'failed' }
+            : { state: conversation.state, preview: conversation.preview },
         );
         recovered++;
       }
-      if (open.size === 0)
+      if (open.size === 0 && staleBusy)
         this.deps.store.updateConversation(conversation.id, { state: 'idle' }, this.now());
     }
     return recovered;
@@ -432,13 +454,15 @@ export class ConversationService {
   private append(conversationId: string, body: ConversationEventBody, patch: ConversationPatch) {
     if (this.disposing) return;
     const derived = { ...deriveFromEvent(body), ...patch };
-    const before = this.deps.store.getConversation(conversationId);
-    const { event, conversation } = this.deps.store.appendEvent(
-      conversationId,
-      body,
-      derived,
-      this.now(),
-    );
+    let before: Conversation | null;
+    let result: { event: ConversationEvent; conversation: Conversation };
+    try {
+      before = this.deps.store.getConversation(conversationId);
+      result = this.deps.store.appendEvent(conversationId, body, derived, this.now());
+    } catch (error) {
+      throw new StoreWriteError(error);
+    }
+    const { event, conversation } = result;
     this.deps.onEvent(event);
     const changed =
       !before ||
@@ -448,6 +472,23 @@ export class ConversationService {
       before.externalSessionId !== conversation.externalSessionId ||
       body.type !== 'text.delta';
     if (changed) this.deps.onConversation(conversation);
+  }
+
+  /**
+   * Records a terminal event when the log is already known to be failing. A
+   * second failure is logged and swallowed: the run stays open in the log and
+   * the next boot's recovery closes it as `interrupted` — never mislabelled.
+   */
+  private appendBestEffort(
+    conversationId: string,
+    body: ConversationEventBody,
+    patch: ConversationPatch,
+  ) {
+    try {
+      this.append(conversationId, body, patch);
+    } catch (error) {
+      console.error('nexus: could not record the end of a run', error);
+    }
   }
 
   private async sessionFor(conversation: Conversation, live: Live): Promise<AdapterSession> {
@@ -462,11 +503,16 @@ export class ConversationService {
         : await adapter.createSession(options);
     live.session = session;
     if (session.externalId !== conversation.externalSessionId) {
-      const updated = this.deps.store.updateConversation(
-        conversation.id,
-        { externalSessionId: session.externalId },
-        this.now(),
-      );
+      let updated: Conversation;
+      try {
+        updated = this.deps.store.updateConversation(
+          conversation.id,
+          { externalSessionId: session.externalId },
+          this.now(),
+        );
+      } catch (error) {
+        throw new StoreWriteError(error);
+      }
       this.deps.onConversation(updated);
     }
     return session;
@@ -503,68 +549,95 @@ export class ConversationService {
     const live = this.liveFor(conversationId);
     let terminal = false;
     try {
-      const session = await this.sessionFor(this.require(conversationId), live);
-      let reply = '';
-      for await (const event of session.sendPrompt({ runId: prompt.runId, text: prompt.text })) {
-        if (event.runId !== prompt.runId || terminal) continue;
-        if (event.type === 'text.delta' && reply.length < PREVIEW_MAX * 2) reply += event.text;
-        if (event.type === 'run.completed' || event.type === 'run.failed') terminal = true;
-        const finishedWithReply =
-          event.type === 'run.completed' && event.stopReason !== 'cancelled' && reply.trim();
-        this.append(conversationId, event, finishedWithReply ? { preview: truncate(reply) } : {});
+      try {
+        const session = await this.sessionFor(this.require(conversationId), live);
+        let reply = '';
+        for await (const event of session.sendPrompt({ runId: prompt.runId, text: prompt.text })) {
+          if (event.runId !== prompt.runId || terminal) continue;
+          if (event.type === 'text.delta' && reply.length < PREVIEW_MAX * 2) reply += event.text;
+          if (event.type === 'run.completed' || event.type === 'run.failed') terminal = true;
+          const finishedWithReply =
+            event.type === 'run.completed' && event.stopReason !== 'cancelled' && reply.trim();
+          this.append(conversationId, event, finishedWithReply ? { preview: truncate(reply) } : {});
+        }
+      } catch (error) {
+        if (error instanceof StoreWriteError) {
+          // The event log is broken, so the user can no longer see what the
+          // harness is doing. Stop the run rather than let it change files
+          // invisibly, and try once to say why; if that write also fails, the
+          // run stays open and the next boot closes it as interrupted.
+          terminal = true;
+          await live.session?.cancel(prompt.runId).catch(() => {});
+          this.appendBestEffort(
+            conversationId,
+            {
+              type: 'run.failed',
+              runId: prompt.runId,
+              error: { code: 'storage_error', message: error.message },
+            },
+            {},
+          );
+        } else if (!terminal && this.stoppedRuns.has(prompt.runId)) {
+          terminal = true;
+          this.append(
+            conversationId,
+            { type: 'run.completed', runId: prompt.runId, stopReason: 'cancelled' },
+            { state: 'idle', preview: '已停止运行' },
+          );
+        } else if (!terminal) {
+          terminal = true;
+          this.append(
+            conversationId,
+            {
+              type: 'run.failed',
+              runId: prompt.runId,
+              error: {
+                code: 'adapter_error',
+                message: error instanceof Error ? error.message : String(error),
+              },
+            },
+            {},
+          );
+        }
+      }
+      if (!terminal) {
+        if (this.stoppedRuns.has(prompt.runId)) {
+          // The process was killed by request, not lost: this is a cancel, and
+          // calling it "result unknown" would alarm the user about nothing.
+          this.append(
+            conversationId,
+            { type: 'run.completed', runId: prompt.runId, stopReason: 'cancelled' },
+            { state: 'idle', preview: '已停止运行' },
+          );
+        } else {
+          this.append(
+            conversationId,
+            {
+              type: 'run.failed',
+              runId: prompt.runId,
+              error: {
+                code: 'no_terminal_event',
+                message: '运行结束时没有收到完成事件，结果未知。',
+              },
+            },
+            {},
+          );
+        }
       }
     } catch (error) {
-      if (!terminal && this.stoppedRuns.has(prompt.runId)) {
-        terminal = true;
-        this.append(
-          conversationId,
-          { type: 'run.completed', runId: prompt.runId, stopReason: 'cancelled' },
-          { state: 'idle', preview: '已停止运行' },
-        );
-      } else if (!terminal) {
-        terminal = true;
-        this.append(
-          conversationId,
-          {
-            type: 'run.failed',
-            runId: prompt.runId,
-            error: {
-              code: 'adapter_error',
-              message: error instanceof Error ? error.message : String(error),
-            },
-          },
-          {},
-        );
-      }
+      // A store failure while closing the run must not skip the cleanup below
+      // or escape as an unhandled rejection. The run stays open in the log;
+      // the next boot's recovery closes it as interrupted.
+      console.error('nexus: could not finish recording a run', error);
+    } finally {
+      this.stoppedRuns.delete(prompt.runId);
+      live.activeRunId = null;
+      this.running.delete(conversationId);
+      // Free slot first, so a globally waiting run can take it; then this
+      // conversation's own queue (which is FIFO per conversation).
+      this.pump();
+      this.nextInConversation(conversationId);
     }
-    if (!terminal) {
-      if (this.stoppedRuns.has(prompt.runId)) {
-        // The process was killed by request, not lost: this is a cancel, and
-        // calling it "result unknown" would alarm the user about nothing.
-        this.append(
-          conversationId,
-          { type: 'run.completed', runId: prompt.runId, stopReason: 'cancelled' },
-          { state: 'idle', preview: '已停止运行' },
-        );
-      } else {
-        this.append(
-          conversationId,
-          {
-            type: 'run.failed',
-            runId: prompt.runId,
-            error: { code: 'no_terminal_event', message: '运行结束时没有收到完成事件，结果未知。' },
-          },
-          {},
-        );
-      }
-    }
-    this.stoppedRuns.delete(prompt.runId);
-    live.activeRunId = null;
-    this.running.delete(conversationId);
-    // Free slot first, so a globally waiting run can take it; then this
-    // conversation's own queue (which is FIFO per conversation).
-    this.pump();
-    this.nextInConversation(conversationId);
   }
 }
 
