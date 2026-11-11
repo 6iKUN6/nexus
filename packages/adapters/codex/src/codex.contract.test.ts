@@ -56,10 +56,14 @@ describe.runIf(executablePath)('Codex contract (real CLI)', () => {
     const events: AgentEvent[] = [];
     for await (const e of session.sendPrompt({
       runId: 'r1',
-      text: 'Count from 1 to 400, one number per line, no commentary.',
+      // A long task plus cancelling on the FIRST delta maximises the window
+      // for turn/interrupt to land before the turn ends on its own; with 3
+      // deltas a fast model could legitimately finish first (observed flake:
+      // stopReason end_turn instead of cancelled).
+      text: 'Count from 1 to 2000, one number per line, no commentary.',
     })) {
       events.push(e);
-      if (events.filter((x) => x.type === 'text.delta').length === 3) await session.cancel('r1');
+      if (events.some((x) => x.type === 'text.delta')) await session.cancel('r1');
     }
     expect(events.at(-1)).toMatchObject({ type: 'run.completed', stopReason: 'cancelled' });
     await session.dispose();
