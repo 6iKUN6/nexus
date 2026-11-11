@@ -59,6 +59,7 @@ function setup(history: ConversationEvent[]) {
     'handoff.prepare': unused,
     'handoff.commit': unused,
     'handoff.cancel': unused,
+    'diagnostics.export': unused,
   };
   serveRpc(serverPort, handlers);
   const store = new CoreStore(async () => createRpcClient(clientPort));

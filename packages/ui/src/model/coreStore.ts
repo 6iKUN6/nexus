@@ -186,6 +186,11 @@ export class CoreStore {
     return this.rpc().request('task.list', { conversationId });
   }
 
+  /** Writes a sanitized diagnostic bundle locally; the result path is local only. */
+  exportDiagnostics(conversationId?: string) {
+    return this.rpc().request('diagnostics.export', { conversationId });
+  }
+
   /** Parent conversations with tasks awaiting review (or failed). */
   async refreshTaskInbox(): Promise<void> {
     const { items } = await this.rpc().request('task.inbox', {});

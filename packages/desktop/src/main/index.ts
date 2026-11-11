@@ -1,4 +1,4 @@
-import { join } from 'node:path';
+import { join, sep } from 'node:path';
 import {
   app,
   BrowserWindow,
@@ -152,6 +152,15 @@ ipcMain.handle('nexus:set-theme', (event, source: unknown) => {
     return;
   }
   nativeTheme.themeSource = source as typeof nativeTheme.themeSource;
+});
+
+ipcMain.handle('nexus:reveal-path', (event, path: unknown) => {
+  if (!isTrustedSender(event.senderFrame?.url)) return;
+  // Only reveal paths core could have produced: inside our own userData dir.
+  if (typeof path !== 'string') return;
+  const root = app.getPath('userData');
+  if (!path.startsWith(root + sep)) return;
+  shell.showItemInFolder(path);
 });
 
 app.whenReady().then(() => {

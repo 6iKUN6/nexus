@@ -1,5 +1,5 @@
 import { Button, Input, Radio, Tooltip } from '@arco-design/web-react';
-import { IconPlus, IconSearch } from '@arco-design/web-react/icon';
+import { IconDownload, IconPlus, IconSearch } from '@arco-design/web-react/icon';
 import type { Conversation, HarnessCapabilities, HarnessInfo, TaskStatus } from '@nexus/protocol';
 import { type Ref, useState } from 'react';
 import { NexusMark } from '../brand/NexusMark';
@@ -21,6 +21,8 @@ type SidebarProps = {
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
   searchRef: Ref<HTMLInputElement>;
+  exporting: boolean;
+  onExportDiagnostics: () => void;
 };
 
 const relative = (at: number) => {
@@ -174,6 +176,19 @@ export function Sidebar(props: SidebarProps) {
         <div className="flex items-center justify-between">
           <span className="text-xs text-fg-3">外观</span>
           <ThemeSwitcher value={props.theme} onChange={props.onThemeChange} />
+        </div>
+        <div className="mt-2 flex items-center justify-between">
+          <span className="text-xs text-fg-3">诊断</span>
+          <Tooltip content="导出脱敏后的诊断包，用于反馈问题">
+            <Button
+              size="mini"
+              type="text"
+              loading={props.exporting}
+              icon={<IconDownload />}
+              aria-label="导出诊断包"
+              onClick={props.onExportDiagnostics}
+            />
+          </Tooltip>
         </div>
       </footer>
     </aside>

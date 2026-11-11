@@ -26,4 +26,8 @@ contextBridge.exposeInMainWorld('nexusDesktop', {
       void ipcRenderer.invoke('nexus:set-theme', source);
     }
   },
+  /** Reveals a core-produced file in Finder/Explorer. Main validates the path. */
+  revealPath(path: string) {
+    void ipcRenderer.invoke('nexus:reveal-path', path);
+  },
 });

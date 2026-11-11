@@ -13,6 +13,8 @@ import type {
 } from '@nexus/protocol';
 import { sendNotification, serveRpc } from '@nexus/protocol';
 import { ConversationService, type HarnessRuntime } from './conversations/conversationService';
+import { exportDiagnostics } from './diagnostics/diagnostics';
+import { installLogCapture } from './diagnostics/logBuffer';
 import { harnessEnvironment } from './env/harnessEnvironment';
 import { resolveLoginShellPath } from './env/loginShellPath';
 import { HandoffService } from './handoff/handoffService';
@@ -33,6 +35,8 @@ export type CoreOptions = {
   adapters: Partial<Record<HarnessId, AgentAdapter>>;
   /** Where isolated worktrees are created (ADR 0006). Defaults next to the database. */
   worktreeDir?: string;
+  /** Where diagnostic bundles are written. Defaults next to the database. */
+  diagnosticsDir?: string;
   /** Injected in tests; defaults to real PATH resolution + filesystem detection. */
   detectHarnesses?: (pathValue: string) => Promise<HarnessInfo[]>;
   resolvePath?: () => Promise<string>;
@@ -123,6 +127,13 @@ export function createCore(options: CoreOptions): Core {
     (options.databasePath === ':memory:'
       ? mkdtempSync(join(tmpdir(), 'nexus-worktrees-'))
       : join(dirname(options.databasePath), 'worktrees'));
+  const diagnosticsDir =
+    options.diagnosticsDir ??
+    (options.databasePath === ':memory:'
+      ? mkdtempSync(join(tmpdir(), 'nexus-diagnostics-'))
+      : join(dirname(options.databasePath), 'diagnostics'));
+  // Packaged builds have no terminal on stderr; keep recent lines for export.
+  installLogCapture();
   let tasks: TaskService | null = null;
   let handoffs: HandoffService | null = null;
   const conversations = new ConversationService({
@@ -200,6 +211,19 @@ export function createCore(options: CoreOptions): Core {
     'handoff.prepare': async (params) => ({ handoff: await handoffService.prepare(params) }),
     'handoff.commit': async (params) => handoffService.commit(params),
     'handoff.cancel': (params) => ({ handoff: handoffService.cancel(params) }),
+    'diagnostics.export': ({ conversationId }) =>
+      exportDiagnostics(
+        {
+          store,
+          version: options.version,
+          harnesses: () => loadHarnesses(false),
+          diagnosticsDir,
+          maxConcurrentRuns: options.maxConcurrentRuns ?? 3,
+          databasePath: options.databasePath,
+          ...(options.now ? { now: options.now } : {}),
+        },
+        conversationId,
+      ),
   };
 
   return {

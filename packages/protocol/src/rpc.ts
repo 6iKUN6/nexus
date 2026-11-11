@@ -134,6 +134,27 @@ export const rpcMethods = {
     }),
     result: z.object({ task: taskSchema }),
   },
+  /**
+   * Writes a sanitized diagnostic bundle (meta, harnesses, event logs, recent
+   * stderr) to a local directory for user-initiated bug reports. Secrets are
+   * redacted before writing; only redaction COUNTS are reported back.
+   */
+  'diagnostics.export': {
+    params: z.object({
+      /** Omit to export every conversation. */
+      conversationId: z.string().optional(),
+    }),
+    result: z.object({
+      /** Directory the bundle was written to. */
+      path: z.string(),
+      redactions: z.object({
+        /** Secret-pattern hits scrubbed from event payloads. */
+        events: z.number().int().nonnegative(),
+        /** `.env`-style assignments scrubbed. */
+        envKeys: z.number().int().nonnegative(),
+      }),
+    }),
+  },
 } satisfies Record<string, { params: z.ZodType; result: z.ZodType }>;
 
 export const rpcNotifications = {

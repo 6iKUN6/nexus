@@ -11,6 +11,7 @@ declare global {
       platform: string;
       setTheme(source: ThemePreference): void;
       pickDirectory(): Promise<string | null>;
+      revealPath(path: string): void;
     };
   }
 }
@@ -19,6 +20,7 @@ const platform: Platform = {
   vibrancy: new URLSearchParams(window.location.search).get('vibrancy') === '1',
   setNativeTheme: (preference) => window.nexusDesktop.setTheme(preference),
   pickDirectory: () => window.nexusDesktop.pickDirectory(),
+  revealPath: (path) => window.nexusDesktop.revealPath(path),
 };
 
 const root = document.getElementById('root');

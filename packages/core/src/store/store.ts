@@ -157,6 +157,11 @@ export class Store {
     this.db.insert(tasks).values(task).run();
   }
 
+  /** Current migration level; recorded in diagnostic bundles to aid support. */
+  schemaVersion(): number {
+    return this.client.pragma('user_version', { simple: true }) as number;
+  }
+
   updateTaskStatus(
     id: string,
     status: TaskStatus,

@@ -12,6 +12,8 @@ export type Platform = {
   setNativeTheme?: (preference: ThemePreference) => void;
   /** Native folder picker; absent in shells without one (users type the path). */
   pickDirectory?: () => Promise<string | null>;
+  /** Reveals a local file in the OS file manager; absent outside desktop shells. */
+  revealPath?: (path: string) => void;
 };
 
 export type AppProps = {
@@ -39,6 +41,7 @@ export function App({ connect, platform }: AppProps) {
       store={store}
       snapshot={snapshot}
       pickDirectory={platform.pickDirectory ?? null}
+      revealPath={platform.revealPath ?? null}
       theme={preference}
       onThemeChange={setPreference}
     />

@@ -23,6 +23,7 @@ type WorkspaceProps = {
   store: CoreStore;
   snapshot: CoreSnapshot;
   pickDirectory: (() => Promise<string | null>) | null;
+  revealPath: ((path: string) => void) | null;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
 };
@@ -39,11 +40,13 @@ export function Workspace({
   store,
   snapshot,
   pickDirectory,
+  revealPath,
   theme,
   onThemeChange,
 }: WorkspaceProps) {
   const [ui, setUi] = useUiState();
   const [creating, setCreating] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [collaboration, setCollaboration] = useState<'delegate' | 'handoff' | null>(null);
   const [parentTask, setParentTask] = useState<Task | null>(null);
   const closedStack = useRef<string[]>([]);
@@ -227,6 +230,21 @@ export function Workspace({
   const harness = active ? snapshot.harnesses?.find((h) => h.id === active.harnessId) : undefined;
   const defaultCwd = active?.cwd ?? conversations[0]?.cwd ?? null;
 
+  const exportDiagnostics = async () => {
+    setExporting(true);
+    try {
+      const result = await store.exportDiagnostics();
+      revealPath?.(result.path);
+      Message.success(
+        `诊断包已导出（已脱敏 ${result.redactions.events + result.redactions.envKeys} 处）`,
+      );
+    } catch (error) {
+      reportError(error);
+    } finally {
+      setExporting(false);
+    }
+  };
+
   return (
     <div className="flex h-full">
       <Sidebar
@@ -240,6 +258,8 @@ export function Workspace({
         theme={theme}
         onThemeChange={onThemeChange}
         searchRef={searchRef}
+        exporting={exporting}
+        onExportDiagnostics={() => void exportDiagnostics()}
       />
       <div className="flex min-w-0 flex-1 flex-col bg-surface-1">
         <TabStrip
