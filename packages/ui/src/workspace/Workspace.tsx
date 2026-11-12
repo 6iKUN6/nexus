@@ -16,6 +16,7 @@ import type { CoreSnapshot, CoreStore } from '../model/coreStore';
 import { useUiState } from '../model/useUiState';
 import type { ThemePreference } from '../theme/themePreference';
 import { DetailPanel } from './DetailPanel';
+import { PreviewPanel } from './PreviewPanel';
 import { Sidebar } from './Sidebar';
 import { TabStrip } from './TabStrip';
 
@@ -24,6 +25,8 @@ type WorkspaceProps = {
   snapshot: CoreSnapshot;
   pickDirectory: (() => Promise<string | null>) | null;
   revealPath: ((path: string) => void) | null;
+  /** Electron shell: the preview pane can embed a real webview (ADR 0014). */
+  webPreview: boolean;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
 };
@@ -41,6 +44,7 @@ export function Workspace({
   snapshot,
   pickDirectory,
   revealPath,
+  webPreview,
   theme,
   onThemeChange,
 }: WorkspaceProps) {
@@ -277,6 +281,8 @@ export function Workspace({
                 conversation={active}
                 detailOpen={ui.detailOpen}
                 onToggleDetail={() => setUi((s) => ({ ...s, detailOpen: !s.detailOpen }))}
+                previewOpen={ui.previewOpen}
+                onTogglePreview={() => setUi((s) => ({ ...s, previewOpen: !s.previewOpen }))}
                 onStop={() => store.cancel(active.id).catch(reportError)}
               />
               {parentTask && (
@@ -298,6 +304,13 @@ export function Workspace({
                 onRetry={retry}
                 onOpenConversation={open}
                 onTaskRespond={respondToTask}
+                onOpenLocalUrl={(url) =>
+                  setUi((s) => ({
+                    ...s,
+                    previewOpen: true,
+                    previewUrls: { ...s.previewUrls, [active.id]: url },
+                  }))
+                }
               />
               <Composer
                 conversation={active}
@@ -312,6 +325,19 @@ export function Workspace({
             </main>
             {ui.detailOpen && (
               <DetailPanel conversation={active} harness={harness} runs={timeline?.runs ?? []} />
+            )}
+            {ui.previewOpen && (
+              <PreviewPanel
+                url={ui.previewUrls[active.id] ?? ''}
+                supportsWebview={webPreview}
+                onUrlChange={(url) =>
+                  setUi((s) => ({
+                    ...s,
+                    previewUrls: { ...s.previewUrls, [active.id]: url },
+                  }))
+                }
+                onClose={() => setUi((s) => ({ ...s, previewOpen: false }))}
+              />
             )}
           </div>
         ) : (

@@ -21,6 +21,7 @@ const platform: Platform = {
   setNativeTheme: (preference) => window.nexusDesktop.setTheme(preference),
   pickDirectory: () => window.nexusDesktop.pickDirectory(),
   revealPath: (path) => window.nexusDesktop.revealPath(path),
+  webPreview: true,
 };
 
 const root = document.getElementById('root');

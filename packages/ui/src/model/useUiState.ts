@@ -12,10 +12,21 @@ export type UiState = {
   /** Highest event seq the user has seen per conversation (for unread). */
   seen: Record<string, number>;
   detailOpen: boolean;
+  /** Preview pane (ADR 0014): open state plus the dev-server URL per conversation. */
+  previewOpen: boolean;
+  previewUrls: Record<string, string>;
 };
 
 const KEY = 'nexus.ui.v1';
-const EMPTY: UiState = { openIds: [], activeId: null, drafts: {}, seen: {}, detailOpen: true };
+const EMPTY: UiState = {
+  openIds: [],
+  activeId: null,
+  drafts: {},
+  seen: {},
+  detailOpen: true,
+  previewOpen: false,
+  previewUrls: {},
+};
 
 function load(): UiState {
   try {
@@ -30,6 +41,9 @@ function load(): UiState {
       drafts: parsed.drafts && typeof parsed.drafts === 'object' ? parsed.drafts : {},
       seen: parsed.seen && typeof parsed.seen === 'object' ? parsed.seen : {},
       detailOpen: parsed.detailOpen !== false,
+      previewOpen: parsed.previewOpen === true,
+      previewUrls:
+        parsed.previewUrls && typeof parsed.previewUrls === 'object' ? parsed.previewUrls : {},
     };
   } catch {
     return EMPTY;

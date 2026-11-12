@@ -14,6 +14,8 @@ export type Platform = {
   pickDirectory?: () => Promise<string | null>;
   /** Reveals a local file in the OS file manager; absent outside desktop shells. */
   revealPath?: (path: string) => void;
+  /** The shell can embed a real <webview> for the preview pane (ADR 0014). */
+  webPreview?: boolean;
 };
 
 export type AppProps = {
@@ -42,6 +44,7 @@ export function App({ connect, platform }: AppProps) {
       snapshot={snapshot}
       pickDirectory={platform.pickDirectory ?? null}
       revealPath={platform.revealPath ?? null}
+      webPreview={platform.webPreview ?? false}
       theme={preference}
       onThemeChange={setPreference}
     />

@@ -13,6 +13,7 @@ import {
 import type { HarnessId, PermissionOption } from '@nexus/protocol';
 import { useEffect, useState } from 'react';
 import { failureTitle } from '../model/buildTimeline';
+import { toolDisplayName } from '../model/toolNames';
 import { PERSONAS, type TimelineItem } from '../model/types';
 
 type Of<K extends TimelineItem['kind']> = Extract<TimelineItem, { kind: K }>;
@@ -44,6 +45,7 @@ const TOOL_STATUS: Record<Of<'tool'>['status'], { icon: React.ReactNode; label: 
 export function ToolCard({ item }: { item: Of<'tool'> }) {
   const [open, setOpen] = useState(false);
   const status = TOOL_STATUS[item.status];
+  const display = toolDisplayName(item.name);
   const expandable = Boolean(item.output) || item.children.length > 0;
   return (
     <div className="rounded-md bg-tint-1">
@@ -60,7 +62,14 @@ export function ToolCard({ item }: { item: Of<'tool'> }) {
           {status.icon}
         </span>
         <span className="sr-only">{status.label}</span>
-        <span className="text-xs font-medium text-fg-1">{item.name}</span>
+        <span className="text-xs font-medium text-fg-1">
+          {display.label}
+          {display.server && (
+            <span className="ml-1.5 rounded bg-tint-3 px-1 py-px text-[10px] text-fg-3">
+              {display.server}
+            </span>
+          )}
+        </span>
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] text-fg-3">
           {item.detail}
         </span>

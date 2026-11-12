@@ -243,6 +243,28 @@ if (!hasTarget) {
   check('取消交接后消息可以继续发送', true);
 }
 
+// Preview pane (ADR 0014): open it, load a local dev server URL, reject remote ones.
+await ev(
+  `[...document.querySelectorAll('button')].find(b => b.getAttribute('aria-label') === '预览面板').click()`,
+);
+await until(`!!document.querySelector('input[aria-label="预览地址"]')`, 'preview pane open');
+await type('input[aria-label="预览地址"]', 'localhost:5173');
+await until(
+  `document.querySelector('webview')?.getAttribute('src') === 'http://localhost:5173/'`,
+  'webview loads the local URL',
+);
+check('预览面板加载本机 dev server 地址（补 http 前缀）', true);
+await type('input[aria-label="预览地址"]', 'https://example.com');
+await until(`document.body.innerText.includes('仅支持本机地址')`, 'remote URL rejected');
+check('预览面板拒绝非本机地址', await ev(`!document.querySelector('webview')`));
+await shot(`${process.env.NEXUS_E2E_DIR}/preview-pane.png`);
+// Restore a valid URL so the persisted state exercises the reload path in step 2.
+await type('input[aria-label="预览地址"]', 'localhost:5173');
+await until(
+  `document.querySelector('webview')?.getAttribute('src') === 'http://localhost:5173/'`,
+  'webview restored',
+);
+
 // Draft persists
 await type('textarea', '未发送的草稿');
 await sleep(600);

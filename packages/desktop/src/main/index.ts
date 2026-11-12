@@ -1,4 +1,5 @@
 import { join, sep } from 'node:path';
+import { normalizeLocalUrl } from '@nexus/protocol';
 import {
   app,
   BrowserWindow,
@@ -22,6 +23,28 @@ import {
 app.setName('Nexus');
 // NEXUS_USER_DATA_DIR isolates all state (SQLite, localStorage) — used by automated UI checks.
 if (process.env.NEXUS_USER_DATA_DIR) app.setPath('userData', process.env.NEXUS_USER_DATA_DIR);
+
+// The in-app preview (ADR 0014) is a <webview>, which spawns a guest
+// webContents. Guard it the same way as the main window but stricter: it may
+// only navigate to local dev servers — it is a preview tool, not a browser.
+// Links to anything else open in the real browser, never inside the guest.
+app.on('web-contents-created', (_event, contents) => {
+  if (contents.getType() !== 'webview') return;
+  contents.on('will-navigate', (event, url) => {
+    if (!normalizeLocalUrl(url)) event.preventDefault();
+  });
+  contents.setWindowOpenHandler(({ url }) => {
+    const local = normalizeLocalUrl(url);
+    if (local) {
+      // A popup to another local server (e.g. an OAuth callback on a second
+      // port) loads inside the guest instead of opening a window.
+      void contents.loadURL(local);
+    } else if (url.startsWith('https://')) {
+      void shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+});
 
 let core: UtilityProcess | null = null;
 let quitting = false;
@@ -80,6 +103,8 @@ function createWindow(): BrowserWindow {
       sandbox: true,
       nodeIntegration: false,
       webSecurity: true,
+      // In-app preview pane (ADR 0014); guests are guarded in web-contents-created.
+      webviewTag: true,
     },
   });
 
@@ -93,7 +118,9 @@ function createWindow(): BrowserWindow {
     if (!isAppUrl(url)) event.preventDefault();
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith('https://')) void shell.openExternal(url);
+    // Local dev servers open in the real browser too (the preview pane's
+    // "open externally" entry); everything else stays https-only.
+    if (url.startsWith('https://') || normalizeLocalUrl(url)) void shell.openExternal(url);
     return { action: 'deny' };
   });
 

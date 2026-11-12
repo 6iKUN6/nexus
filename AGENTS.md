@@ -105,7 +105,7 @@ Need something across a boundary? Add an RPC method to `protocol/src/rpc.ts` (sc
 ## Security
 
 - The renderer is sandboxed (`contextIsolation`, `sandbox`, no `nodeIntegration`). The preload hands over the core port and exposes `platform` and `setTheme` (ADR 0004). Add nothing else without an ADR. Main validates every IPC sender with `isAppUrl` and whitelists the arguments.
-- The window may only navigate to the app itself (reloads and HMR are allowed). Everything else is blocked, and external https links open in the browser.
+- The window may only navigate to the app itself (reloads and HMR are allowed). Everything else is blocked, and external https links open in the browser. The preview pane's `<webview>` (ADR 0014) may only load localhost URLs; that whitelist lives in `normalizeLocalUrl` (protocol), shared by the UI check and the main-process guest guard.
 - Core does not listen on any network port. Future local IPC sockets (the collaboration helper) live in the user's directory with mode 0600 and require a per-session token.
 - Never log, persist or export secrets (`.env`, API keys, tokens). Diagnostic exports exclude them by default.
 

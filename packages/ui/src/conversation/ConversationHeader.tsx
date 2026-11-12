@@ -1,5 +1,5 @@
 import { Button, Tooltip } from '@arco-design/web-react';
-import { IconFolder, IconLayout, IconRecordStop } from '@arco-design/web-react/icon';
+import { IconFolder, IconLayout, IconPublic, IconRecordStop } from '@arco-design/web-react/icon';
 import type { Conversation } from '@nexus/protocol';
 import { PERSONAS } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
@@ -10,11 +10,15 @@ export function ConversationHeader({
   conversation,
   detailOpen,
   onToggleDetail,
+  previewOpen,
+  onTogglePreview,
   onStop,
 }: {
   conversation: Conversation;
   detailOpen: boolean;
   onToggleDetail: () => void;
+  previewOpen: boolean;
+  onTogglePreview: () => void;
   onStop: () => void;
 }) {
   const busy = conversation.state === 'running' || conversation.state === 'waiting_user';
@@ -41,6 +45,16 @@ export function ConversationHeader({
           停止运行
         </Button>
       )}
+      <Tooltip content={previewOpen ? '关闭预览' : '预览 dev server'} mini>
+        <Button
+          size="small"
+          type={previewOpen ? 'secondary' : 'text'}
+          icon={<IconPublic />}
+          aria-pressed={previewOpen}
+          aria-label="预览面板"
+          onClick={onTogglePreview}
+        />
+      </Tooltip>
       <Tooltip content={detailOpen ? '隐藏详情' : '显示详情'} mini>
         <Button
           size="small"

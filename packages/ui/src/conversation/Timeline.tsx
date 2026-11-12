@@ -19,6 +19,8 @@ type TimelineProps = {
   onRetry: (() => void) | null;
   onOpenConversation: (id: string) => void;
   onTaskRespond: (taskId: string, action: 'accept' | 'request_changes', feedback?: string) => void;
+  /** Local dev-server URLs in messages become chips that open the preview pane. */
+  onOpenLocalUrl?: (url: string) => void;
 };
 
 const time = (at: number) =>
@@ -37,6 +39,7 @@ export function Timeline({
   onRetry,
   onOpenConversation,
   onTaskRespond,
+  onOpenLocalUrl,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const atBottomRef = useRef(true);
@@ -88,6 +91,7 @@ export function Timeline({
           ) : (
             items.map((item, index) => (
               <TimelineRow
+                onOpenLocalUrl={onOpenLocalUrl}
                 key={item.id}
                 item={item}
                 previous={items[index - 1]}
@@ -142,6 +146,7 @@ function TimelineRow({
   onRetry,
   onOpenConversation,
   onTaskRespond,
+  onOpenLocalUrl,
 }: {
   item: TimelineItem;
   previous: TimelineItem | undefined;
@@ -150,6 +155,7 @@ function TimelineRow({
   onRetry: TimelineProps['onRetry'];
   onOpenConversation: TimelineProps['onOpenConversation'];
   onTaskRespond: TimelineProps['onTaskRespond'];
+  onOpenLocalUrl: TimelineProps['onOpenLocalUrl'];
 }) {
   switch (item.kind) {
     case 'user':
@@ -162,7 +168,7 @@ function TimelineRow({
           <div
             className={`nx-selectable max-w-[78%] rounded-[18px] rounded-br-md bg-bubble-out px-3.5 py-2 text-[13px] leading-relaxed text-on-accent ${item.queued ? 'opacity-60' : ''}`}
           >
-            <MessageText text={item.text} />
+            <MessageText text={item.text} onOpenLocalUrl={onOpenLocalUrl} />
           </div>
         </div>
       );
@@ -184,7 +190,7 @@ function TimelineRow({
               </span>
             )}
             <div className="nx-selectable rounded-[18px] rounded-tl-md bg-bubble-in px-3.5 py-2 text-[13px] leading-relaxed text-fg-1">
-              <MessageText text={item.text} />
+              <MessageText text={item.text} onOpenLocalUrl={onOpenLocalUrl} />
               {item.streaming && (
                 <span className="nx-pulse ml-0.5 inline-block h-3.5 w-1.5 translate-y-0.5 rounded-sm bg-fg-3" />
               )}
