@@ -29,6 +29,8 @@ const conversation = (over: Partial<Conversation> = {}): Conversation => ({
   state: 'idle',
   lastSeq: 0,
   preview: '工作目录 repo',
+  goal: null,
+  fallbackHarnessId: null,
   createdAt: 1,
   updatedAt: 1,
   ...over,

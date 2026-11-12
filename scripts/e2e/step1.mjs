@@ -175,6 +175,13 @@ check(
 await click('text=交接');
 const drawer = '.arco-drawer';
 await until(`!!document.querySelector('${drawer} input[aria-label="交接目标"]')`, 'handoff drawer');
+// D22: the dialog comes prefilled from the log (goal chain + derived next
+// action); the user still edits and confirms.
+await until(
+  `document.querySelector('${drawer} input[aria-label="交接目标"]').value === '整理 notes' && document.querySelector('${drawer} textarea[aria-label="接手方先做什么"]').value.includes('最近的用户要求')`,
+  'prefilled handoff draft',
+);
+check('交接对话框从日志预填目标与下一步', true);
 // A second chat-capable harness is needed to hand off to. CI installs none of
 // the real CLIs, so there the dialog can only show that fact — assert that and
 // move on instead of failing on an environment property.

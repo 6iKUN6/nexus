@@ -29,6 +29,8 @@ export const conversations = sqliteTable('conversations', {
   state: text('state').$type<ConversationState>().notNull(),
   lastSeq: integer('last_seq').notNull(),
   preview: text('preview').notNull(),
+  goal: text('goal'),
+  fallbackHarnessId: text('fallback_harness_id').$type<HarnessId>(),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });

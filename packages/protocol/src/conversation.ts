@@ -44,6 +44,14 @@ export const conversationSchema = z.object({
   lastSeq: z.number().int().nonnegative(),
   /** Short text for list rows. */
   preview: z.string(),
+  /**
+   * The task's goal, when the user pinned one down (D22). Optional on purpose:
+   * ordinary chats never need it; the handoff flow falls back to the first
+   * user message and then the title when it is null.
+   */
+  goal: z.string().nullable(),
+  /** Pre-selected receiver for a one-click handoff after a failure (D22). */
+  fallbackHarnessId: harnessIdSchema.nullable(),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

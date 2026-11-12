@@ -110,10 +110,22 @@ export class CoreStore {
     cwd: string;
     isolation: 'direct' | 'worktree';
     title?: string;
+    goal?: string;
   }) {
     const { conversation } = await this.rpc().request('conversation.create', input);
     this.upsert(conversation);
     this.merge(conversation.id, []);
+    return conversation;
+  }
+
+  /** Conversation settings (D22): optional goal and handoff fallback harness. */
+  async configureConversation(input: {
+    conversationId: string;
+    goal?: string | null;
+    fallbackHarnessId?: HarnessId | null;
+  }) {
+    const { conversation } = await this.rpc().request('conversation.configure', input);
+    this.upsert(conversation);
     return conversation;
   }
 
@@ -180,6 +192,11 @@ export class CoreStore {
   async cancelHandoff(handoffId: string) {
     const { handoff } = await this.rpc().request('handoff.cancel', { handoffId });
     return handoff;
+  }
+
+  /** Prefill for the handoff dialog; read-only, nothing is stopped. */
+  suggestHandoff(conversationId: string) {
+    return this.rpc().request('handoff.suggest', { conversationId });
   }
 
   listTasks(conversationId: string) {

@@ -39,6 +39,8 @@ export const rpcMethods = {
       /** Defaults to direct for backwards compatibility; the UI always sends it. */
       isolation: isolationSchema.default('direct'),
       title: z.string().trim().min(1).max(120).optional(),
+      /** Optional up front (D22); editable later through conversation.configure. */
+      goal: z.string().trim().min(1).max(500).optional(),
     }),
     result: z.object({ conversation: conversationSchema }),
   },
@@ -62,6 +64,19 @@ export const rpcMethods = {
     result: z.object({ events: z.array(conversationEventSchema) }),
   },
   /** Sends a prompt; if a run is active it is queued and runs afterwards. */
+  /**
+   * Edits the conversation's own settings (D22): the optional goal and the
+   * fallback harness used to prefill a handoff after a failure. Fields left
+   * undefined are untouched; null clears them.
+   */
+  'conversation.configure': {
+    params: z.object({
+      conversationId: z.string(),
+      goal: z.string().trim().max(500).nullable().optional(),
+      fallbackHarnessId: harnessIdSchema.nullable().optional(),
+    }),
+    result: z.object({ conversation: conversationSchema }),
+  },
   'conversation.send': {
     params: z.object({ conversationId: z.string(), text: z.string().trim().min(1) }),
     result: z.object({ messageId: z.string(), runId: z.string(), queued: z.boolean() }),
@@ -114,6 +129,20 @@ export const rpcMethods = {
       assumptions: z.array(z.string().trim().min(1).max(500)).max(20).default([]),
     }),
     result: z.object({ handoff: handoffSchema }),
+  },
+  /**
+   * Prefills the handoff dialog from data core already has (D22): goal chain
+   * (explicit → first user message → title), a next action derived from the
+   * log, and the receiver (the conversation's fallback harness when it is not
+   * the current owner). Pure read — nothing is stopped or frozen.
+   */
+  'handoff.suggest': {
+    params: z.object({ conversationId: z.string() }),
+    result: z.object({
+      goal: z.string(),
+      nextAction: z.string(),
+      toHarnessId: harnessIdSchema.nullable(),
+    }),
   },
   /** Commits a reviewed package: swaps the owner (CAS on the version) and starts the receiver. */
   'handoff.commit': {

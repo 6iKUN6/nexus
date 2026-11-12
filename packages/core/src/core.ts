@@ -193,6 +193,7 @@ export function createCore(options: CoreOptions): Core {
     'conversation.events': ({ conversationId, afterSeq }) => ({
       events: conversations.events(conversationId, afterSeq),
     }),
+    'conversation.configure': (params) => ({ conversation: conversations.configure(params) }),
     'conversation.send': ({ conversationId, text }) => conversations.send(conversationId, text),
     'conversation.cancel': async ({ conversationId }) => ({
       cancelled: await conversations.cancel(conversationId),
@@ -208,6 +209,7 @@ export function createCore(options: CoreOptions): Core {
     'task.list': ({ conversationId }) => taskService.list(conversationId),
     'task.inbox': () => ({ items: taskService.inbox() }),
     'task.respond': (params) => taskService.respond(params),
+    'handoff.suggest': (params) => handoffService.suggest(params.conversationId),
     'handoff.prepare': async (params) => ({ handoff: await handoffService.prepare(params) }),
     'handoff.commit': async (params) => handoffService.commit(params),
     'handoff.cancel': (params) => ({ handoff: handoffService.cancel(params) }),

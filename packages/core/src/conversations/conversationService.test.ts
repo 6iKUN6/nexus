@@ -480,3 +480,34 @@ describe('fault injection (D20)', () => {
     second.store.close();
   });
 });
+
+describe('configure (D22)', () => {
+  it('stores an optional goal at creation and lets configure set or clear it', async () => {
+    const { service, updates } = setup();
+    const created = await service.create({
+      harnessId: 'fake',
+      cwd: tempDir(),
+      goal: '让登录后跳回原页面',
+    });
+    expect(created.goal).toBe('让登录后跳回原页面');
+    expect(created.fallbackHarnessId).toBeNull();
+
+    const cleared = service.configure({ conversationId: created.id, goal: null });
+    expect(cleared.goal).toBeNull();
+    expect(updates.at(-1)).toMatchObject({ id: created.id, goal: null });
+
+    const withFallback = service.configure({
+      conversationId: created.id,
+      fallbackHarnessId: 'fake',
+    });
+    expect(withFallback.fallbackHarnessId).toBe('fake');
+  });
+
+  it('rejects a fallback harness that has no adapter', async () => {
+    const { service } = setup();
+    const created = await service.create({ harnessId: 'fake', cwd: tempDir() });
+    expect(() =>
+      service.configure({ conversationId: created.id, fallbackHarnessId: 'codex' }),
+    ).toThrow(/暂不支持/);
+  });
+});

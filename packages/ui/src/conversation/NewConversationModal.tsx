@@ -10,6 +10,8 @@ export type NewConversationInput = {
   cwd: string;
   isolation: Isolation;
   title?: string;
+  /** Optional (D22); the handoff dialog falls back to the first message. */
+  goal?: string;
 };
 
 type PathInfo = RpcResult<'path.inspect'>;
@@ -37,6 +39,7 @@ export function NewConversationModal({
   const [harnessId, setHarnessId] = useState<HarnessId | null>(firstSupported);
   const [cwd, setCwd] = useState(defaultCwd ?? '');
   const [title, setTitle] = useState('');
+  const [goal, setGoal] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [inspect, setInspect] = useState<PathInfo | null>(null);
@@ -94,8 +97,10 @@ export function NewConversationModal({
         cwd: cwd.trim(),
         isolation,
         ...(title.trim() ? { title: title.trim() } : {}),
+        ...(goal.trim() ? { goal: goal.trim() } : {}),
       });
       setTitle('');
+      setGoal('');
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -198,6 +203,14 @@ export function NewConversationModal({
             onChange={setTitle}
             maxLength={120}
             placeholder="例如：修复登录跳转"
+          />
+        </Form.Item>
+        <Form.Item label="目标（可选）" extra="这个任务最终要达成什么；交接时用来预填">
+          <Input
+            value={goal}
+            onChange={setGoal}
+            maxLength={500}
+            placeholder="例如：让登录后正确跳回原页面"
           />
         </Form.Item>
         {error && <Alert type="error" content={error} />}

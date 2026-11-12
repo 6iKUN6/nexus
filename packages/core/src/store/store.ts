@@ -37,7 +37,14 @@ import {
 export type ConversationPatch = Partial<
   Pick<
     Conversation,
-    'title' | 'state' | 'preview' | 'externalSessionId' | 'harnessId' | 'ownerVersion'
+    | 'title'
+    | 'state'
+    | 'preview'
+    | 'externalSessionId'
+    | 'harnessId'
+    | 'ownerVersion'
+    | 'goal'
+    | 'fallbackHarnessId'
   >
 >;
 

@@ -32,6 +32,8 @@ const conversation = (over: Partial<Conversation> = {}): Conversation => ({
   state: 'idle',
   lastSeq: 0,
   preview: '',
+  goal: null,
+  fallbackHarnessId: null,
   createdAt: 1,
   updatedAt: 1,
   ...over,
@@ -112,7 +114,7 @@ describe('exportDiagnostics', () => {
 
     expect(result.redactions.events).toBe(1);
     const meta = JSON.parse(readFileSync(join(result.path, 'meta.json'), 'utf8'));
-    expect(meta).toMatchObject({ app: 'nexus', version: '0.0.1', schemaVersion: 4 });
+    expect(meta).toMatchObject({ app: 'nexus', version: '0.0.1', schemaVersion: 5 });
 
     const events = readFileSync(join(result.path, 'conversations', 'c1.jsonl'), 'utf8');
     expect(events).not.toContain(leaked);

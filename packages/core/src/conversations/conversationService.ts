@@ -183,6 +183,7 @@ export class ConversationService {
     cwd: string;
     isolation?: Isolation | undefined;
     title?: string | undefined;
+    goal?: string | undefined;
   }) {
     if (!this.deps.adapters[input.harnessId]) {
       throw new RpcError(ErrorCode.Unsupported, `暂不支持在 ${input.harnessId} 中创建会话`);
@@ -233,6 +234,8 @@ export class ConversationService {
       state: 'idle',
       lastSeq: 0,
       preview: `工作目录 ${basename(actualCwd)}`,
+      goal: input.goal ?? null,
+      fallbackHarnessId: null,
       createdAt: now,
       updatedAt: now,
     };
@@ -243,6 +246,38 @@ export class ConversationService {
     }
     this.deps.onConversation(conversation);
     return conversation;
+  }
+
+  /**
+   * Conversation settings outside the run lifecycle (D22): the optional goal
+   * and the fallback harness used to prefill a handoff after a failure.
+   * Undefined fields are untouched; null clears them. Store failures are
+   * tagged like every other write, so the user sees one consistent message.
+   */
+  configure(input: {
+    conversationId: string;
+    goal?: string | null | undefined;
+    fallbackHarnessId?: HarnessId | null | undefined;
+  }): Conversation {
+    const conversation = this.require(input.conversationId);
+    if (input.fallbackHarnessId && !this.deps.adapters[input.fallbackHarnessId]) {
+      throw new RpcError(
+        ErrorCode.Unsupported,
+        `暂不支持 ${input.fallbackHarnessId} 作为备用执行者`,
+      );
+    }
+    const patch: ConversationPatch = {};
+    if (input.goal !== undefined) patch.goal = input.goal;
+    if (input.fallbackHarnessId !== undefined) patch.fallbackHarnessId = input.fallbackHarnessId;
+    if (Object.keys(patch).length === 0) return conversation;
+    let next: Conversation;
+    try {
+      next = this.deps.store.updateConversation(conversation.id, patch, this.now());
+    } catch (error) {
+      throw new StoreWriteError(error);
+    }
+    this.deps.onConversation(next);
+    return next;
   }
 
   /** What the new-conversation dialog needs to know about a directory. */

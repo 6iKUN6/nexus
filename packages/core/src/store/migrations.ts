@@ -60,4 +60,8 @@ export const MIGRATIONS: string[] = [
      updated_at INTEGER NOT NULL
    );
    CREATE INDEX handoffs_by_conversation ON handoffs (conversation_id);`,
+  // D22: optional per-conversation goal and a pre-selected handoff fallback.
+  // Both nullable — ordinary chats never set them.
+  `ALTER TABLE conversations ADD COLUMN goal TEXT;
+   ALTER TABLE conversations ADD COLUMN fallback_harness_id TEXT;`,
 ];

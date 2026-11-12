@@ -36,10 +36,17 @@ const lines = (text: string) =>
  * for review; only confirming changes the owner. A blocked stop leaves a
  * problem the user can read verbatim.
  */
+export type HandoffSuggestion = {
+  goal: string;
+  nextAction: string;
+  toHarnessId: HarnessId | null;
+};
+
 export function HandoffDialog({
   conversation,
   harnesses,
   visible,
+  suggestion,
   onClose,
   onPrepare,
   onCommit,
@@ -48,6 +55,8 @@ export function HandoffDialog({
   conversation: Conversation;
   harnesses: HarnessInfo[] | null;
   visible: boolean;
+  /** Prefill from core (D22); still fully editable before prepare. */
+  suggestion: HandoffSuggestion | null;
   onClose: () => void;
   onPrepare: (draft: HandoffDraft) => Promise<Handoff>;
   onCommit: (handoff: Handoff) => Promise<void>;
@@ -66,17 +75,18 @@ export function HandoffDialog({
   const first = candidates[0]?.id ?? conversation.harnessId;
   const [toHarnessId, setToHarnessId] = useState<HarnessId>(first);
 
-  // biome-ignore lint/correctness/useExhaustiveDependencies: reset per opening only
+  // biome-ignore lint/correctness/useExhaustiveDependencies: the prefill applies once per opening; typing must win afterwards
   useEffect(() => {
     if (!visible) return;
     setHandoff(null);
     setProblem(null);
     setBusy(null);
-    setGoal(conversation.title === '新会话' ? '' : conversation.title);
-    setNextAction('');
+    setGoal(suggestion?.goal ?? (conversation.title === '新会话' ? '' : conversation.title));
+    setNextAction(suggestion?.nextAction ?? '');
     setFacts('');
     setAssumptions('');
-    setToHarnessId(first);
+    const suggested = suggestion?.toHarnessId;
+    setToHarnessId(suggested && candidates.some((c) => c.id === suggested) ? suggested : first);
   }, [visible]);
 
   const prepare = async () => {

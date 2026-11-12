@@ -28,6 +28,8 @@ const okHandlers: RpcHandlers = {
   'handoff.prepare': unused,
   'handoff.commit': unused,
   'handoff.cancel': unused,
+  'conversation.configure': unused,
+  'handoff.suggest': unused,
   'diagnostics.export': unused,
   'system.ping': () => ({ coreVersion: '0.0.0-test', uptimeMs: 5 }),
   'harness.list': ({ refresh }) => ({

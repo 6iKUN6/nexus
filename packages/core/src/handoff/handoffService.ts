@@ -10,6 +10,7 @@ import type { Store } from '../store/store';
 import { VersionConflict } from '../store/store';
 import { captureWorkspace, type GitRun } from '../worktree/gitWorktree';
 import { assemblePackage, composeBrief } from './contextPackage';
+import { suggestHandoff } from './suggest';
 
 /**
  * Simplifed handoff (M4, ADR 0011): `stopping_source → prepared → committed →
@@ -47,6 +48,17 @@ export class HandoffService {
   private booted = false;
 
   constructor(private readonly deps: HandoffServiceDeps) {}
+
+  /**
+   * Read-only prefill for the handoff dialog (D22): derived goal, next action
+   * and receiver. Nothing is stopped or frozen — the user still reviews and
+   * `prepare` still verifies the source stop.
+   */
+  suggest(conversationId: string) {
+    const conversation = this.deps.conversations.get(conversationId);
+    const events = this.deps.store.listEvents(conversationId, 0);
+    return suggestHandoff(conversation, events, (id) => Boolean(this.deps.adapters[id]));
+  }
 
   /**
    * Stops the source agent (and blocks when that cannot be verified), then

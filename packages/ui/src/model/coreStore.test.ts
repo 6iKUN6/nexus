@@ -22,6 +22,8 @@ const conversation: Conversation = {
   state: 'idle',
   lastSeq: 0,
   preview: '',
+  goal: null,
+  fallbackHarnessId: null,
   createdAt: 1,
   updatedAt: 1,
 };
@@ -59,6 +61,8 @@ function setup(history: ConversationEvent[]) {
     'handoff.prepare': unused,
     'handoff.commit': unused,
     'handoff.cancel': unused,
+    'conversation.configure': unused,
+    'handoff.suggest': unused,
     'diagnostics.export': unused,
   };
   serveRpc(serverPort, handlers);

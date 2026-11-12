@@ -87,6 +87,7 @@ Need something across a boundary? Add an RPC method to `protocol/src/rpc.ts` (sc
 - View models live in `packages/ui/src/model/` (`types.ts`, `buildTimeline.ts`, `coreStore.ts`). Components receive view models and callbacks; only `Workspace` talks to `CoreStore`.
 - Delegation is live (M3, ADR 0008): `DelegateDialog` → `task.delegate`, progress folded into a `DelegationCard`.
 - Handoff is live (M4, ADR 0011): `HandoffDialog` → `handoff.prepare` (stops and **verifies** the source, freezes a context package) → `handoff.commit` (CAS on `ownerVersion`). Prompts typed during the review queue and run under the receiver. Never commit a handoff whose source stop was not confirmed.
+- Goal and handoff prefill (D22, ADR 0015): `Conversation.goal` is optional and never a task classification; `handoff.suggest` derives goal (explicit → first user message → title) and next action from the log, zero model calls. The dialog prefills, the user still reviews; `conversation.configure` edits goal and fallback harness.
 
 ## Harness adapters & processes
 

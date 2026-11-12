@@ -120,4 +120,32 @@ describe('core', () => {
     expect(events.map((e) => e.seq)).toEqual(pushed.map((e) => e.seq));
     expect(events[0]?.body).toMatchObject({ type: 'user.message', text: 'hello' });
   });
+
+  it('prefills the handoff dialog from the log (D22)', async () => {
+    const { client } = connect(async () => [], { fake: createFakeAdapter() });
+    const { conversation } = await client.request('conversation.create', {
+      harnessId: 'fake',
+      cwd: process.cwd(),
+    });
+    await client.request('conversation.send', {
+      conversationId: conversation.id,
+      text: '帮我修好登录跳转',
+    });
+
+    const suggestion = await client.request('handoff.suggest', {
+      conversationId: conversation.id,
+    });
+    expect(suggestion.goal).toBe('帮我修好登录跳转');
+    expect(suggestion.nextAction).toContain('帮我修好登录跳转');
+    expect(suggestion.toHarnessId).toBeNull();
+
+    const configured = await client.request('conversation.configure', {
+      conversationId: conversation.id,
+      goal: '让登录后跳回原页面',
+    });
+    expect(configured.conversation.goal).toBe('让登录后跳回原页面');
+    await expect(
+      client.request('handoff.suggest', { conversationId: conversation.id }),
+    ).resolves.toMatchObject({ goal: '让登录后跳回原页面' });
+  });
 });

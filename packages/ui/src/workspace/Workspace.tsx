@@ -5,7 +5,11 @@ import { NexusAppIcon } from '../brand/NexusMark';
 import { Composer } from '../conversation/Composer';
 import { ConversationHeader } from '../conversation/ConversationHeader';
 import { DelegateDialog, type DelegateInput } from '../conversation/DelegateDialog';
-import { HandoffDialog, type HandoffDraft } from '../conversation/HandoffDialog';
+import {
+  HandoffDialog,
+  type HandoffDraft,
+  type HandoffSuggestion,
+} from '../conversation/HandoffDialog';
 import {
   type NewConversationInput,
   NewConversationModal,
@@ -52,6 +56,7 @@ export function Workspace({
   const [creating, setCreating] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [collaboration, setCollaboration] = useState<'delegate' | 'handoff' | null>(null);
+  const [handoffSuggestion, setHandoffSuggestion] = useState<HandoffSuggestion | null>(null);
   const [parentTask, setParentTask] = useState<Task | null>(null);
   const closedStack = useRef<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -320,11 +325,32 @@ export function Workspace({
                 }
                 onSend={send}
                 onStop={() => store.cancel(active.id).catch(reportError)}
-                onCollaboration={setCollaboration}
+                onCollaboration={(mode) => {
+                  if (mode !== 'handoff') {
+                    setCollaboration(mode);
+                    return;
+                  }
+                  // Prefill from core before opening (D22); a failed read just
+                  // means an empty form, never a blocked handoff.
+                  store
+                    .suggestHandoff(active.id)
+                    .then(setHandoffSuggestion, () => setHandoffSuggestion(null))
+                    .finally(() => setCollaboration('handoff'));
+                }}
               />
             </main>
             {ui.detailOpen && (
-              <DetailPanel conversation={active} harness={harness} runs={timeline?.runs ?? []} />
+              <DetailPanel
+                conversation={active}
+                harness={harness}
+                runs={timeline?.runs ?? []}
+                harnesses={snapshot.harnesses}
+                onConfigure={(patch) => {
+                  void store
+                    .configureConversation({ conversationId: active.id, ...patch })
+                    .catch(reportError);
+                }}
+              />
             )}
             {ui.previewOpen && (
               <PreviewPanel
@@ -364,6 +390,7 @@ export function Workspace({
           visible
           conversation={active}
           harnesses={snapshot.harnesses}
+          suggestion={handoffSuggestion}
           onClose={() => setCollaboration(null)}
           onPrepare={prepareHandoff}
           onCommit={commitHandoff}
