@@ -257,6 +257,28 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
           problem: body.problem,
         });
         break;
+      case 'agent.message':
+        items.push({
+          kind: 'agentMessage',
+          id,
+          at,
+          messageId: body.messageId,
+          direction: body.direction,
+          peerConversationId: body.peerConversationId,
+          text: body.text,
+        });
+        break;
+      case 'handoff.requested':
+        // A request, not a handoff: the user still opens the dialog and
+        // confirms (ADR 0011/0016).
+        items.push({
+          kind: 'handoffRequest',
+          id,
+          at,
+          toHarnessId: body.toHarnessId,
+          reason: body.reason,
+        });
+        break;
       case 'task.updated': {
         // Fold the transition into the existing card; a missing card (gap in
         // the log) is skipped, the task list RPC is the fallback source.

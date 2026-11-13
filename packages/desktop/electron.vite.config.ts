@@ -13,6 +13,7 @@ export default defineConfig({
         input: {
           index: resolve(__dirname, 'src/main/index.ts'),
           core: resolve(__dirname, 'src/core-host/index.ts'),
+          helper: resolve(__dirname, 'src/helper/index.ts'),
         },
       },
     },

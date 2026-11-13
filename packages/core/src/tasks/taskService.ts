@@ -46,6 +46,16 @@ function composeBrief(task: Task, parent: Conversation, child: Conversation): st
     `你在 ${child.cwd} 工作，这是 ${base} 的独立 worktree，与委派方互不影响。`,
     '',
     '完成后请给出简要结果说明：做了什么、如何验证、还有哪些遗留。',
+    // pi has no MCP loading, so the one-shot helper is announced in this
+    // core-written brief instead of a global system prompt (ADR 0016).
+    ...(child.harnessId === 'pi'
+      ? [
+          '',
+          '## 协作命令',
+          '如需向委派方汇报结果，运行：`"$NEXUS_HELPER_PATH" report_result \'{"summary":"…"}\'`。',
+          '其他命令见 `"$NEXUS_HELPER_PATH" --help`。汇报成功后会自动通知委派方。',
+        ]
+      : []),
   ].join('\n');
 }
 
@@ -105,6 +115,29 @@ export class TaskService {
     });
     this.deps.conversations.send(child.id, composeBrief(task, parent, child));
     return { task, childConversation: child };
+  }
+
+  /**
+   * A child agent reports its own outcome (D14). Same terminal states as the
+   * automatic observation, but the agent gets to say whether it is blocked;
+   * a blocked report is a failure the parent must see, not a review request.
+   */
+  reportResult(input: { conversationId: string; summary: string; blocked: boolean }): {
+    taskId: string;
+    status: 'review' | 'failed';
+  } {
+    const task = this.deps.store.getTaskByChild(input.conversationId);
+    if (!task) throw new RpcError(TaskErrorCode.NotFound, '当前会话不是子任务，无需汇报结果');
+    if (task.status !== 'running') {
+      throw new RpcError(TaskErrorCode.InvalidTaskState, '这个子任务已经结束，不能重复汇报');
+    }
+    const summary =
+      input.summary.length > SUMMARY_MAX
+        ? `${input.summary.slice(0, SUMMARY_MAX)}…`
+        : input.summary;
+    const status = input.blocked ? 'failed' : 'review';
+    this.finish(task, status, summary);
+    return { taskId: task.id, status };
   }
 
   respond(input: { taskId: string; action: 'accept' | 'request_changes'; feedback: string }): {

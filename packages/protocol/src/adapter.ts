@@ -26,6 +26,12 @@ export type CreateSessionOptions = {
   executablePath: string | null;
   /** Environment for the harness process (includes the login-shell PATH). */
   env: Record<string, string>;
+  /**
+   * Collaboration channel for this session (D14, ADR 0016). Core issues a
+   * per-session token bound to the conversation; adapters that can load MCP
+   * hand the helper to the harness, others just pass the env vars through.
+   */
+  collaboration?: { socketPath: string; token: string; helperPath: string };
 };
 
 /** Result of stopping a session: what the caller may safely claim afterwards. */

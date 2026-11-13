@@ -80,6 +80,23 @@ export type TimelineItem =
       state: Extract<HandoffState, 'committed' | 'aborted' | 'needs_reconciliation'>;
       problem: string | null;
     }
+  | {
+      kind: 'agentMessage';
+      id: string;
+      at: number;
+      messageId: string;
+      /** `out` on the sender's log, `in` on the recipient's (D14). */
+      direction: 'in' | 'out';
+      peerConversationId: string;
+      text: string;
+    }
+  | {
+      kind: 'handoffRequest';
+      id: string;
+      at: number;
+      toHarnessId: HarnessId;
+      reason: string;
+    }
   | { kind: 'system'; id: string; text: string };
 
 export type RunSummary = {

@@ -4,6 +4,7 @@ import type { HarnessId, PermissionOption } from '@nexus/protocol';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PERSONAS, type TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
+import { AgentMessageCard, HandoffRequestCard } from './CollaborationCards';
 import { DelegationCard } from './DelegationCard';
 import { HandoffCard } from './HandoffCard';
 import { MessageText } from './MessageText';
@@ -19,6 +20,8 @@ type TimelineProps = {
   onRetry: (() => void) | null;
   onOpenConversation: (id: string) => void;
   onTaskRespond: (taskId: string, action: 'accept' | 'request_changes', feedback?: string) => void;
+  /** An agent asked for a handoff (D14); the user still confirms it. */
+  onRequestHandoff: (toHarnessId: HarnessId) => void;
   /** Local dev-server URLs in messages become chips that open the preview pane. */
   onOpenLocalUrl?: (url: string) => void;
 };
@@ -39,6 +42,7 @@ export function Timeline({
   onRetry,
   onOpenConversation,
   onTaskRespond,
+  onRequestHandoff,
   onOpenLocalUrl,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -100,6 +104,7 @@ export function Timeline({
                 onRetry={item.kind === 'failure' && index === items.length - 1 ? onRetry : null}
                 onOpenConversation={onOpenConversation}
                 onTaskRespond={onTaskRespond}
+                onRequestHandoff={onRequestHandoff}
               />
             ))
           )}
@@ -146,6 +151,7 @@ function TimelineRow({
   onRetry,
   onOpenConversation,
   onTaskRespond,
+  onRequestHandoff,
   onOpenLocalUrl,
 }: {
   item: TimelineItem;
@@ -155,6 +161,7 @@ function TimelineRow({
   onRetry: TimelineProps['onRetry'];
   onOpenConversation: TimelineProps['onOpenConversation'];
   onTaskRespond: TimelineProps['onTaskRespond'];
+  onRequestHandoff: TimelineProps['onRequestHandoff'];
   onOpenLocalUrl: TimelineProps['onOpenLocalUrl'];
 }) {
   switch (item.kind) {
@@ -222,6 +229,12 @@ function TimelineRow({
             />
           )}
           {item.kind === 'handoff' && <HandoffCard item={item} />}
+          {item.kind === 'agentMessage' && (
+            <AgentMessageCard item={item} onOpenConversation={onOpenConversation} />
+          )}
+          {item.kind === 'handoffRequest' && (
+            <HandoffRequestCard item={item} onRequest={onRequestHandoff} />
+          )}
         </div>
       );
   }

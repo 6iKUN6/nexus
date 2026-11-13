@@ -309,6 +309,15 @@ export function Workspace({
                 onRetry={retry}
                 onOpenConversation={open}
                 onTaskRespond={respondToTask}
+                onRequestHandoff={(toHarnessId) => {
+                  // The agent asked first; suggestHandoff still fills goal and
+                  // next action, but the agent's target wins over the derived one.
+                  store
+                    .suggestHandoff(active.id)
+                    .then((s) => setHandoffSuggestion({ ...s, toHarnessId }))
+                    .catch(() => setHandoffSuggestion({ goal: '', nextAction: '', toHarnessId }))
+                    .finally(() => setCollaboration('handoff'));
+                }}
                 onOpenLocalUrl={(url) =>
                   setUi((s) => ({
                     ...s,

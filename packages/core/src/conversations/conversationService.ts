@@ -48,6 +48,13 @@ export type ConversationServiceDeps = {
   gitRun: GitRun;
   onEvent: (event: ConversationEvent) => void;
   onConversation: (conversation: Conversation) => void;
+  /** Collaboration channel (D14): token issuance and env injection per session. */
+  collaboration?: {
+    socketPath: string;
+    helperPath: string;
+    issueToken: (conversationId: string) => string;
+    revokeToken: (token: string) => void;
+  };
   /** Runs allowed to execute at once across all conversations. Defaults to 3. */
   maxConcurrentRuns?: number;
   now?: () => number;
@@ -80,6 +87,12 @@ class StoreWriteError extends Error {
 
 export class ConversationService {
   private readonly live = new Map<string, Live>();
+  /**
+   * Collaboration token of the live session per conversation (D14). Tokens are
+   * memory-only; this map is what lets a stop revoke exactly the lease it
+   * handed out, and disposeSessions clear everything at shutdown.
+   */
+  private readonly collabTokens = new Map<string, string>();
   private readonly now: () => number;
   private readonly newId: () => string;
   private readonly maxConcurrentRuns: number;
@@ -150,6 +163,24 @@ export class ConversationService {
       body.state === 'committed'
         ? truncate(`已交接给 ${target}`)
         : truncate(`交接未完成：${body.problem ?? '原因未知'}`);
+    this.append(conversationId, body, { preview });
+  }
+
+  /**
+   * Records a cross-conversation event the agents produced themselves (D14).
+   * Messages land on both logs: the sender sees `out`, the peer `in`.
+   */
+  recordCollaborationEvent(
+    conversationId: string,
+    body: Extract<ConversationEventBody, { type: 'agent.message' | 'handoff.requested' }>,
+  ): void {
+    this.require(conversationId);
+    const preview =
+      body.type === 'agent.message'
+        ? truncate(
+            `${body.direction === 'out' ? '发送' : '收到'}协作消息：${body.text.replace(/\s+/g, ' ')}`,
+          )
+        : truncate(`请求交接给 ${harnessLabel(body.toHarnessId)}：${body.reason}`);
     this.append(conversationId, body, { preview });
   }
 
@@ -439,6 +470,10 @@ export class ConversationService {
       live.session = null;
       live.activeRunId = null;
     }
+    // The token outlives the process only as long as the process does: revoke
+    // it even if dispose cannot confirm the stop, so a surviving process can
+    // no longer act as this conversation.
+    this.revokeCollabToken(conversationId);
     if (!session) return { confirmed: true, problem: null };
     return session.dispose();
   }
@@ -450,6 +485,9 @@ export class ConversationService {
       live.session ? [live.session] : [],
     );
     this.live.clear();
+    for (const conversationId of [...this.collabTokens.keys()]) {
+      this.revokeCollabToken(conversationId);
+    }
     const outcomes = await Promise.allSettled(sessions.map((session) => session.dispose()));
     return outcomes.flatMap((outcome) =>
       outcome.status === 'rejected'
@@ -484,6 +522,13 @@ export class ConversationService {
       this.live.set(conversationId, live);
     }
     return live;
+  }
+
+  private revokeCollabToken(conversationId: string): void {
+    const token = this.collabTokens.get(conversationId);
+    if (!token) return;
+    this.collabTokens.delete(conversationId);
+    this.deps.collaboration?.revokeToken(token);
   }
 
   private append(conversationId: string, body: ConversationEventBody, patch: ConversationPatch) {
@@ -531,11 +576,38 @@ export class ConversationService {
     const adapter = this.deps.adapters[conversation.harnessId];
     if (!adapter) throw new Error(`No adapter for ${conversation.harnessId}`);
     const runtime = await this.deps.runtimeFor(conversation.harnessId);
-    const options = { cwd: conversation.cwd, ...runtime };
-    const session =
-      conversation.externalSessionId && adapter.resumeSession
-        ? await adapter.resumeSession(conversation.externalSessionId, options)
-        : await adapter.createSession(options);
+    const collab = this.deps.collaboration;
+    // Issue a fresh token per session: it dies with the session, and a
+    // resumed session gets a new one instead of inheriting an old lease.
+    const token = collab ? collab.issueToken(conversation.id) : null;
+    if (token) this.collabTokens.set(conversation.id, token);
+    const options = {
+      cwd: conversation.cwd,
+      ...runtime,
+      ...(collab && token
+        ? {
+            env: {
+              ...runtime.env,
+              NEXUS_SOCKET: collab.socketPath,
+              NEXUS_TOKEN: token,
+              NEXUS_HELPER_PATH: collab.helperPath,
+            },
+            collaboration: { socketPath: collab.socketPath, token, helperPath: collab.helperPath },
+          }
+        : {}),
+    };
+    let session: AdapterSession;
+    try {
+      session =
+        conversation.externalSessionId && adapter.resumeSession
+          ? await adapter.resumeSession(conversation.externalSessionId, options)
+          : await adapter.createSession(options);
+    } catch (error) {
+      // The token was issued for a session that never came up; drop it so a
+      // failed start does not leave a valid lease behind.
+      this.revokeCollabToken(conversation.id);
+      throw error;
+    }
     live.session = session;
     if (session.externalId !== conversation.externalSessionId) {
       let updated: Conversation;

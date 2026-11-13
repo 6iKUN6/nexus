@@ -1,6 +1,6 @@
 # 0016 协作通道（D14）
 
-日期：2026-11-13。状态：已接受，待实现。协议变更（`CreateSessionOptions.collaboration`、`agent.message`/`handoff.requested` 事件）按本 ADR 执行。
+日期：2026-11-13。状态：已接受，已实现。协议变更（`CreateSessionOptions.collaboration`、`agent.message`/`handoff.requested` 事件）按本 ADR 执行。
 
 ## 背景
 
@@ -49,6 +49,12 @@ M3 委派（ADR 0008）只支持**用户发起**：UI 点委派 → core 写简�
 - 新事件体 `agent.message`：`{ messageId, peerConversationId, direction: 'in'|'out', text }`，发送方记 `out`、接收方记 `in`，UI 渲染为消息卡片。
 - 新事件体 `handoff.requested`：`{ toHarnessId, reason }`，UI 卡片点击打开预填交接对话框（复用 D22 的 `handoff.suggest`）。
 - 表结构不动；messages 表属于 D15。
+
+## 实现备注（2026-11-13）
+
+- 启动方式改为由 core 生成 `<userData>/bin/nexus-helper`（0755 的 `/bin/sh` 脚本），内容只有路径：桌面壳通过 `NEXUS_ELECTRON_PATH` 告诉 core 用哪个 Electron 二进制 + `ELECTRON_RUN_AS_NODE=1` 运行 `out/main/helper.js`。这样 pi 的 brief 只需写 `"$NEXUS_HELPER_PATH" <tool> '<json>'`，Claude 的 MCP `command` 也可以直接用这个脚本，无需各自拼命令行。
+- Codex 暂未注入（app-server 的 MCP 配置机制仍然未验证），不假装支持。
+- 代码：`packages/core/src/collaboration/`（server / tokens / service / shim）、`packages/desktop/src/helper/index.ts`（MCP + 一次性 CLI）、`packages/adapters/claude` 的 `mcpServers` 注入。
 
 ## 后果
 

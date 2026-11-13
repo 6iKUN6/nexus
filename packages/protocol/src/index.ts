@@ -1,4 +1,5 @@
 export * from './adapter';
+export * from './collaboration';
 export * from './conversation';
 export * from './events';
 export * from './handoff';

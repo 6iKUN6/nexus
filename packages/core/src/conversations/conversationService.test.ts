@@ -7,11 +7,16 @@ import type {
   AgentAdapter,
   Conversation,
   ConversationEvent,
+  CreateSessionOptions,
 } from '@nexus/protocol';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { Store } from '../store/store';
 import { GitError } from '../worktree/gitWorktree';
-import { ConversationService, ErrorCode } from './conversationService';
+import {
+  ConversationService,
+  type ConversationServiceDeps,
+  ErrorCode,
+} from './conversationService';
 
 const cleanups: Array<() => void> = [];
 afterEach(() => {
@@ -34,6 +39,7 @@ function setup(
   dbPath = ':memory:',
   worktreeCreate?: (cwd: string, id: string) => Promise<{ cwd: string; repoRoot: string }>,
   maxConcurrentRuns?: number,
+  extra?: Partial<ConversationServiceDeps>,
 ) {
   const store = new Store(dbPath);
   const events: ConversationEvent[] = [];
@@ -55,6 +61,7 @@ function setup(
     onConversation: (c) => updates.push(c),
     newId: () => `id-${++id}`,
     ...(maxConcurrentRuns === undefined ? {} : { maxConcurrentRuns }),
+    ...extra,
   });
   return { store, service, events, updates, worktreeCalls };
 }
@@ -91,6 +98,44 @@ describe('ConversationService', () => {
       lastSeq: events.length,
     });
     expect(saved?.preview).toContain('收到');
+  });
+
+  it('issues a collaboration token per session and revokes it when the session stops', async () => {
+    const seen: CreateSessionOptions[] = [];
+    const revoked: string[] = [];
+    const base = createFakeAdapter();
+    const adapter: AgentAdapter = {
+      ...base,
+      createSession: (options) => {
+        seen.push(options);
+        return base.createSession(options);
+      },
+    };
+    const { service } = setup(adapter, ':memory:', undefined, undefined, {
+      collaboration: {
+        socketPath: '/tmp/nexus.sock',
+        helperPath: '/tmp/nexus-helper',
+        issueToken: (conversationId) => `token-${conversationId}`,
+        revokeToken: (token) => revoked.push(token),
+      },
+    });
+    const c = await service.create({ harnessId: 'fake', cwd: tempDir() });
+    service.send(c.id, 'hi');
+    await waitFor(() => seen.length > 0);
+
+    expect(seen[0]?.env).toMatchObject({
+      NEXUS_SOCKET: '/tmp/nexus.sock',
+      NEXUS_TOKEN: `token-${c.id}`,
+      NEXUS_HELPER_PATH: '/tmp/nexus-helper',
+    });
+    expect(seen[0]?.collaboration).toEqual({
+      socketPath: '/tmp/nexus.sock',
+      token: `token-${c.id}`,
+      helperPath: '/tmp/nexus-helper',
+    });
+
+    await service.stopSession(c.id);
+    expect(revoked).toEqual([`token-${c.id}`]);
   });
 
   it('queues prompts while a run is active and runs them in order', async () => {

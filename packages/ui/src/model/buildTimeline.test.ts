@@ -224,3 +224,27 @@ describe('buildTimeline handoff (M4)', () => {
     });
   });
 });
+
+describe('buildTimeline collaboration (D14)', () => {
+  it('renders agent messages and handoff requests as their own cards', () => {
+    const { items } = buildTimeline(
+      log(
+        {
+          type: 'agent.message',
+          messageId: 'm1',
+          peerConversationId: 'child-1',
+          direction: 'in',
+          text: '需要确认登录跳转的规则',
+        },
+        { type: 'handoff.requested', toHarnessId: 'codex', reason: '这个任务更适合 Codex' },
+      ),
+    );
+    expect(items.map((item) => item.kind)).toEqual(['agentMessage', 'handoffRequest']);
+    expect(items[0]).toMatchObject({
+      direction: 'in',
+      peerConversationId: 'child-1',
+      text: '需要确认登录跳转的规则',
+    });
+    expect(items[1]).toMatchObject({ toHarnessId: 'codex', reason: '这个任务更适合 Codex' });
+  });
+});

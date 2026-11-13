@@ -57,6 +57,9 @@ function startCore(): UtilityProcess {
       ...process.env,
       NEXUS_VERSION: app.getVersion(),
       NEXUS_DATA_DIR: app.getPath('userData'),
+      // Lets core start the collaboration helper under Electron-as-Node (D14)
+      // via the real app binary, which a utility process's execPath may not be.
+      NEXUS_ELECTRON_PATH: process.execPath,
     },
   });
   child.on('exit', (code) => {

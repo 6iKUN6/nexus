@@ -84,7 +84,7 @@ function createClaudeSession(
   queryImpl: QueryFn,
   externalId: string,
   existing: boolean,
-  { cwd, executablePath, env }: CreateSessionOptions,
+  { cwd, executablePath, env, collaboration }: CreateSessionOptions,
 ): AdapterSession {
   let hasHistory = existing;
   let active: { runId: string; abort: AbortController } | null = null;
@@ -165,6 +165,27 @@ function createClaudeSession(
         },
         ...(executablePath ? { pathToClaudeCodeExecutable: executablePath } : {}),
         ...(hasHistory ? { resume: externalId } : { sessionId: externalId }),
+        // The Nexus collaboration channel ships as a stdio MCP server (D14).
+        // It is additive: built-in tools keep working exactly as before, and
+        // its five terse tools cost only their definitions. Never alwaysLoad —
+        // the SDK may defer them behind tool search, which is what we want.
+        ...(collaboration
+          ? {
+              mcpServers: {
+                nexus: {
+                  type: 'stdio' as const,
+                  // The launcher core generated: it knows how to start the
+                  // bundled helper and forwards these env vars unchanged.
+                  command: collaboration.helperPath,
+                  args: ['mcp'],
+                  env: {
+                    NEXUS_SOCKET: collaboration.socketPath,
+                    NEXUS_TOKEN: collaboration.token,
+                  },
+                },
+              },
+            }
+          : {}),
       };
 
       const finish = (event: AgentEvent | null) => {

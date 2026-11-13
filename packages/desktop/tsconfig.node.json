@@ -4,5 +4,5 @@
     "lib": ["ES2023", "DOM"],
     "types": ["node"]
   },
-  "include": ["src/main", "src/preload", "src/core-host", "electron.vite.config.ts"]
+  "include": ["src/main", "src/preload", "src/core-host", "src/helper", "electron.vite.config.ts"]
 }

@@ -44,10 +44,21 @@ const adapters: Partial<Record<HarnessId, AgentAdapter>> = {
     : {}),
 };
 
+// The helper ships next to this bundle. electron-builder unpacks it from the
+// asar (see asarUnpack) because Electron-as-Node executes it as a real file.
+const helperScript = join(__dirname, 'helper.js').replace('app.asar', 'app.asar.unpacked');
+// Main knows the app binary that can run Electron-as-Node; its own execPath is
+// also a usable fallback, but only main's is guaranteed to be the app binary.
+const electronPath = process.env.NEXUS_ELECTRON_PATH ?? process.execPath;
+
 const core = createCore({
   version: process.env.NEXUS_VERSION ?? '0.0.0',
   databasePath: join(dataDir, 'nexus.sqlite'),
   adapters,
+  collaboration: {
+    helperScript,
+    runner: { command: electronPath, env: { ELECTRON_RUN_AS_NODE: '1' } },
+  },
 });
 
 function toRpcPort(port: MessagePortMain): RpcPort {

@@ -12,6 +12,10 @@ import type {
   RpcPort,
 } from '@nexus/protocol';
 import { sendNotification, serveRpc } from '@nexus/protocol';
+import { startCollaborationServer } from './collaboration/server';
+import { CollaborationService } from './collaboration/service';
+import { writeHelperShim } from './collaboration/shim';
+import { SessionTokens } from './collaboration/tokens';
 import { ConversationService, type HarnessRuntime } from './conversations/conversationService';
 import { exportDiagnostics } from './diagnostics/diagnostics';
 import { installLogCapture } from './diagnostics/logBuffer';
@@ -37,6 +41,17 @@ export type CoreOptions = {
   worktreeDir?: string;
   /** Where diagnostic bundles are written. Defaults next to the database. */
   diagnosticsDir?: string;
+  /**
+   * Enables the agent collaboration channel (D14). `helperScript` is the built
+   * helper bundle and `runner` the executable able to run it (Electron-as-Node
+   * in the app). Core generates the `nexus-helper` launcher itself; the socket
+   * defaults to `<database dir>/nexus.sock`.
+   */
+  collaboration?: {
+    helperScript: string;
+    runner: { command: string; args?: string[]; env?: Record<string, string> };
+    socketPath?: string;
+  };
   /** Injected in tests; defaults to real PATH resolution + filesystem detection. */
   detectHarnesses?: (pathValue: string) => Promise<HarnessInfo[]>;
   resolvePath?: () => Promise<string>;
@@ -134,6 +149,20 @@ export function createCore(options: CoreOptions): Core {
       : join(dirname(options.databasePath), 'diagnostics'));
   // Packaged builds have no terminal on stderr; keep recent lines for export.
   installLogCapture();
+  const socketPath =
+    options.collaboration?.socketPath ??
+    (options.databasePath === ':memory:'
+      ? join(tmpdir(), `nexus-collab-${randomUUID()}.sock`)
+      : join(dirname(options.databasePath), 'nexus.sock'));
+  const sessionTokens = new SessionTokens();
+  const helperDir =
+    options.databasePath === ':memory:'
+      ? join(tmpdir(), `nexus-helper-${randomUUID()}`)
+      : join(dirname(options.databasePath), 'bin');
+  const helperPath = join(helperDir, 'nexus-helper');
+  if (options.collaboration) {
+    writeHelperShim(helperPath, options.collaboration.runner, options.collaboration.helperScript);
+  }
   let tasks: TaskService | null = null;
   let handoffs: HandoffService | null = null;
   const conversations = new ConversationService({
@@ -151,6 +180,16 @@ export function createCore(options: CoreOptions): Core {
       const info = list.find((h) => h.id === harnessId);
       return { executablePath: info?.executablePath ?? null, env: harnessEnvironment(path) };
     },
+    ...(options.collaboration
+      ? {
+          collaboration: {
+            socketPath,
+            helperPath,
+            issueToken: (conversationId: string) => sessionTokens.issue(conversationId),
+            revokeToken: (token: string) => sessionTokens.revoke(token),
+          },
+        }
+      : {}),
     onEvent: (event) => broadcast('conversation.event', event),
     onConversation: (conversation) => {
       broadcast('conversation.updated', conversation);
@@ -174,6 +213,19 @@ export function createCore(options: CoreOptions): Core {
     newId: options.newId ?? randomUUID,
   });
   handoffs = handoffService;
+  const collaboration = new CollaborationService({
+    conversations,
+    tasks: taskService,
+    isHarnessSupported: (harnessId) => Boolean(options.adapters[harnessId]),
+    ...(options.newId ? { newId: options.newId } : {}),
+  });
+  const collabServer = options.collaboration
+    ? startCollaborationServer({
+        socketPath,
+        tokens: sessionTokens,
+        handlers: collaboration.handlers,
+      })
+    : null;
   conversations.recoverInterruptedRuns();
   // Tasks whose child settled while core was down still get their transition.
   taskService.reconcile();
@@ -238,6 +290,8 @@ export function createCore(options: CoreOptions): Core {
       };
     },
     async dispose() {
+      // Stop the socket first: no new tool calls while sessions are torn down.
+      await collabServer?.close();
       await conversations.dispose();
       store.close();
     },

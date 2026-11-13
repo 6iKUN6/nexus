@@ -85,6 +85,23 @@ export const coreEventSchema = z.discriminatedUnion('type', [
     summary: z.string().nullable(),
   }),
   /**
+   * A message between two agents in a task tree (D14). The sender's log gets
+   * the `out` direction, the receiver's log the `in` one; both share the id.
+   */
+  z.object({
+    type: z.literal('agent.message'),
+    messageId: z.string(),
+    peerConversationId: z.string(),
+    direction: z.enum(['in', 'out']),
+    text: z.string(),
+  }),
+  /** An agent asked the user to hand this task over (D14); the user still confirms. */
+  z.object({
+    type: z.literal('handoff.requested'),
+    toHarnessId: harnessIdSchema,
+    reason: z.string(),
+  }),
+  /**
    * A handoff reached a final state (M4). `stopping_source`/`prepared` are
    * transient and never persisted; a blocked handoff is recorded as `aborted`
    * so the timeline explains why the owner did not change.

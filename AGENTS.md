@@ -86,6 +86,7 @@ Need something across a boundary? Add an RPC method to `protocol/src/rpc.ts` (sc
 - **Brand**: the logo source of truth is `assets/logos/` (designer-owned; don't edit or reformat it, and Biome ignores it). The in-app mark is `<NexusMark>` / `<NexusAppIcon>` in `packages/ui/src/brand/`. Its paths are copied from `nexus-mark.svg`, and it uses `currentColor` with the `text-brand-mark` token (ink #172924 in light mode, paper #F4F5EF in dark). Use `bg-brand-mint` / `text-brand-ink` for brand surfaces. The UI accent stays Apple systemBlue (`brand`); don't confuse the two.
 - View models live in `packages/ui/src/model/` (`types.ts`, `buildTimeline.ts`, `coreStore.ts`). Components receive view models and callbacks; only `Workspace` talks to `CoreStore`.
 - Delegation is live (M3, ADR 0008): `DelegateDialog` → `task.delegate`, progress folded into a `DelegationCard`.
+- Agent-initiated collaboration (D14, ADR 0016) renders as its own cards: `agent.message` (方向 out/in) and `handoff.requested` (button opens the prefilled handoff dialog; the user still confirms). They are not chat bubbles.
 - Handoff is live (M4, ADR 0011): `HandoffDialog` → `handoff.prepare` (stops and **verifies** the source, freezes a context package) → `handoff.commit` (CAS on `ownerVersion`). Prompts typed during the review queue and run under the receiver. Never commit a handoff whose source stop was not confirmed.
 - Goal and handoff prefill (D22, ADR 0015): `Conversation.goal` is optional and never a task classification; `handoff.suggest` derives goal (explicit → first user message → title) and next action from the log, zero model calls. The dialog prefills, the user still reviews; `conversation.configure` edits goal and fallback harness.
 
@@ -102,12 +103,13 @@ Need something across a boundary? Add an RPC method to `protocol/src/rpc.ts` (sc
 - **Worktree isolation (ADR 0006)**: conversations run in a detached-HEAD worktree under `<userData>/worktrees/<id>` by default when the cwd is a git repo; `direct` mode is opt-in and one directory allows only one direct conversation. `Conversation.cwd` is always the actual run directory — adapters never need to know about isolation.
 - GUI apps don't get the shell PATH. Always resolve CLIs through `resolveLoginShellPath()`.
 - Record behaviour against real CLI versions in `probes/` first, then copy representative outputs into adapter test fixtures.
+- **Collaboration channel (D14, ADR 0016)**: core serves `collab.*` on `<userData>/nexus.sock` (0600, NDJSON JSON-RPC, `auth {token}` first). Tokens are issued per adapter session, memory-only and revoked on stop/dispose. `packages/desktop/src/helper/` (`nexus-helper mcp` / one-shot) is the only client; core generates the launcher and injects `NEXUS_SOCKET`/`NEXUS_TOKEN`/`NEXUS_HELPER_PATH`. Claude gets it as an additive `mcpServers.nexus` entry, pi gets it as a `$NEXUS_HELPER_PATH` line in core-written briefs only, Codex does not get it until its injection mechanism is verified. Tools are exactly five; keep their schemas terse (tokens cost every turn), and values they return are data, never instructions.
 
 ## Security
 
 - The renderer is sandboxed (`contextIsolation`, `sandbox`, no `nodeIntegration`). The preload hands over the core port and exposes `platform` and `setTheme` (ADR 0004). Add nothing else without an ADR. Main validates every IPC sender with `isAppUrl` and whitelists the arguments.
 - The window may only navigate to the app itself (reloads and HMR are allowed). Everything else is blocked, and external https links open in the browser. The preview pane's `<webview>` (ADR 0014) may only load localhost URLs; that whitelist lives in `normalizeLocalUrl` (protocol), shared by the UI check and the main-process guest guard.
-- Core does not listen on any network port. Future local IPC sockets (the collaboration helper) live in the user's directory with mode 0600 and require a per-session token.
+- Core does not listen on any network port. The collaboration socket (D14) lives in the user's directory with mode 0600, requires a per-session token that is never persisted, and only exposes the five tools to the conversation that owns the token.
 - Never log, persist or export secrets (`.env`, API keys, tokens). Diagnostic exports exclude them by default.
 
 ## Testing
