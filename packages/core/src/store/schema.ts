@@ -4,6 +4,7 @@ import type {
   Handoff,
   HarnessId,
   Isolation,
+  MessageState,
   TaskStatus,
 } from '@nexus/protocol';
 import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
@@ -56,6 +57,21 @@ export const tasks = sqliteTable('tasks', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+export const messages = sqliteTable('messages', {
+  id: text('id').primaryKey(),
+  senderId: text('sender_id').notNull(),
+  recipientId: text('recipient_id').notNull(),
+  taskId: text('task_id'),
+  kind: text('kind').$type<'message'>().notNull(),
+  text: text('text').notNull(),
+  replyTo: text('reply_to'),
+  state: text('state').$type<MessageState>().notNull(),
+  runId: text('run_id'),
+  createdAt: integer('created_at').notNull(),
+  deliveredAt: integer('delivered_at'),
+  consumedAt: integer('consumed_at'),
+});
+
 export const handoffs = sqliteTable('handoffs', {
   id: text('id').primaryKey(),
   conversationId: text('conversation_id').notNull(),
@@ -75,3 +91,4 @@ export type ConversationInsert = typeof conversations.$inferInsert;
 export type TaskRow = typeof tasks.$inferSelect;
 export type TaskInsert = typeof tasks.$inferInsert;
 export type HandoffRow = typeof handoffs.$inferSelect;
+export type MessageRow = typeof messages.$inferSelect;

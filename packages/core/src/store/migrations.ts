@@ -64,4 +64,23 @@ export const MIGRATIONS: string[] = [
   // Both nullable — ordinary chats never set them.
   `ALTER TABLE conversations ADD COLUMN goal TEXT;
    ALTER TABLE conversations ADD COLUMN fallback_harness_id TEXT;`,
+  // D15 delivery semantics (ADR 0017): one durable row per agent message, used
+  // as both outbox and inbox; the primary key is the dedupe point.
+  `CREATE TABLE messages (
+     id TEXT PRIMARY KEY,
+     sender_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+     recipient_id TEXT NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
+     task_id TEXT REFERENCES tasks(id) ON DELETE SET NULL,
+     kind TEXT NOT NULL DEFAULT 'message',
+     text TEXT NOT NULL,
+     reply_to TEXT,
+     state TEXT NOT NULL,
+     run_id TEXT,
+     created_at INTEGER NOT NULL,
+     delivered_at INTEGER,
+     consumed_at INTEGER
+   );
+   CREATE INDEX messages_by_sender ON messages (sender_id);
+   CREATE INDEX messages_by_recipient ON messages (recipient_id);
+   CREATE INDEX messages_by_state ON messages (state);`,
 ];

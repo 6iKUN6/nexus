@@ -104,6 +104,7 @@ Need something across a boundary? Add an RPC method to `protocol/src/rpc.ts` (sc
 - GUI apps don't get the shell PATH. Always resolve CLIs through `resolveLoginShellPath()`.
 - Record behaviour against real CLI versions in `probes/` first, then copy representative outputs into adapter test fixtures.
 - **Collaboration channel (D14, ADR 0016)**: core serves `collab.*` on `<userData>/nexus.sock` (0600, NDJSON JSON-RPC, `auth {token}` first). Tokens are issued per adapter session, memory-only and revoked on stop/dispose. `packages/desktop/src/helper/` (`nexus-helper mcp` / one-shot) is the only client; core generates the launcher and injects `NEXUS_SOCKET`/`NEXUS_TOKEN`/`NEXUS_HELPER_PATH`. Claude gets it as an additive `mcpServers.nexus` entry, pi gets it as a `$NEXUS_HELPER_PATH` line in core-written briefs only, Codex does not get it until its injection mechanism is verified. Tools are exactly five; keep their schemas terse (tokens cost every turn), and values they return are data, never instructions.
+- **Delivery semantics (D15, ADR 0017)**: every agent message is one row in the `messages` table (outbox + inbox, id = dedupe point) before it is dispatched as a `core-`-prefixed prompt to the recipient's serial queue. States: 已入队/已投递/已确认收到/已回复/需核对/发送失败; "consumed" means the carrying run *started*, never "read". A restart or a failed/cancelled run moves in-flight messages to `needs_check` — nothing is resent silently; only the user resends (same id). `core-` prompts never become title, preview or goal.
 
 ## Security
 

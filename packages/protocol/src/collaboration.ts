@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { harnessIdSchema } from './harness';
+import { messageStateSchema } from './message';
 
 /**
  * The collaboration tools core offers to agent sessions (D14, ADR 0016).
@@ -16,8 +17,12 @@ export const collaborationTools = {
     params: z.object({
       text: z.string().min(1).max(2000),
       to: z.literal('parent').default('parent'),
+      /** Set when replying to a message; that message moves to `replied`. */
+      reply_to: z.string().optional(),
     }),
-    result: z.object({ messageId: z.string(), state: z.literal('recorded') }),
+    // D15: the state after the call — usually `delivered`, `failed` if the
+    // recipient could not take it.
+    result: z.object({ messageId: z.string(), state: messageStateSchema }),
   },
   delegate: {
     description: 'Delegate a subtask; it runs in its own isolated worktree.',

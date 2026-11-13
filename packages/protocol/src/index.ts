@@ -6,5 +6,6 @@ export * from './handoff';
 export * from './harness';
 export * from './localUrl';
 export * from './memoryPort';
+export * from './message';
 export * from './rpc';
 export * from './task';

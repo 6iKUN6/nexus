@@ -4,11 +4,13 @@ import {
   type ConversationEventBody,
   conversationEventBodySchema,
   type Handoff,
+  type MessageRecord,
+  type MessageState,
   type Task,
   type TaskStatus,
 } from '@nexus/protocol';
 import Database from 'better-sqlite3';
-import { and, asc, desc, eq, gt, inArray } from 'drizzle-orm';
+import { and, asc, desc, eq, gt, inArray, or } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { MIGRATIONS } from './migrations';
 import {
@@ -18,6 +20,8 @@ import {
   events,
   type HandoffRow,
   handoffs,
+  type MessageRow,
+  messages,
   type TaskRow,
   tasks,
 } from './schema';
@@ -58,6 +62,10 @@ function toTask(row: TaskRow): Task {
 }
 
 function toHandoff(row: HandoffRow): Handoff {
+  return row;
+}
+
+function toMessage(row: MessageRow): MessageRecord {
   return row;
 }
 
@@ -162,6 +170,59 @@ export class Store {
 
   insertTask(task: Task): void {
     this.db.insert(tasks).values(task).run();
+  }
+
+  /**
+   * Inserts a message; a row with the same id is returned unchanged instead of
+   * throwing — that is the dedupe point (D15, at-least-once + consume-dedupe).
+   */
+  insertMessage(message: MessageRecord): { message: MessageRecord; created: boolean } {
+    const existing = this.getMessage(message.id);
+    if (existing) return { message: existing, created: false };
+    this.db.insert(messages).values(message).run();
+    return { message, created: true };
+  }
+
+  getMessage(id: string): MessageRecord | null {
+    const row = this.db.select().from(messages).where(eq(messages.id, id)).get();
+    return row ? toMessage(row) : null;
+  }
+
+  updateMessage(
+    id: string,
+    patch: Partial<Pick<MessageRecord, 'state' | 'runId' | 'deliveredAt' | 'consumedAt'>>,
+  ): MessageRecord {
+    const current = this.getMessage(id);
+    if (!current) throw new Error(`Unknown message ${id}`);
+    this.db.update(messages).set(patch).where(eq(messages.id, id)).run();
+    return { ...current, ...patch };
+  }
+
+  /** Everything one conversation sent or received, oldest first. */
+  listMessagesFor(conversationId: string): MessageRecord[] {
+    return this.db
+      .select()
+      .from(messages)
+      .where(or(eq(messages.senderId, conversationId), eq(messages.recipientId, conversationId)))
+      .orderBy(asc(messages.createdAt))
+      .all()
+      .map(toMessage);
+  }
+
+  /** The message a run carries, if any (delivered→consumed tracking). */
+  getMessageByRun(runId: string): MessageRecord | null {
+    const row = this.db.select().from(messages).where(eq(messages.runId, runId)).get();
+    return row ? toMessage(row) : null;
+  }
+
+  /** Delivery never completed; checked at boot so nothing is silently lost. */
+  listInflightMessages(): MessageRecord[] {
+    return this.db
+      .select()
+      .from(messages)
+      .where(inArray(messages.state, ['queued', 'delivered'] satisfies MessageState[]))
+      .all()
+      .map(toMessage);
   }
 
   /** Current migration level; recorded in diagnostic bundles to aid support. */

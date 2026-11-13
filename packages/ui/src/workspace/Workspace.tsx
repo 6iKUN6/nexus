@@ -1,5 +1,5 @@
 import { Button, Message } from '@arco-design/web-react';
-import type { Conversation, Handoff, PermissionOption, Task } from '@nexus/protocol';
+import type { Conversation, Handoff, MessageRecord, PermissionOption, Task } from '@nexus/protocol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NexusAppIcon } from '../brand/NexusMark';
 import { Composer } from '../conversation/Composer';
@@ -58,6 +58,7 @@ export function Workspace({
   const [collaboration, setCollaboration] = useState<'delegate' | 'handoff' | null>(null);
   const [handoffSuggestion, setHandoffSuggestion] = useState<HandoffSuggestion | null>(null);
   const [parentTask, setParentTask] = useState<Task | null>(null);
+  const [agentMessages, setAgentMessages] = useState<MessageRecord[]>([]);
   const closedStack = useRef<string[]>([]);
   const searchRef = useRef<HTMLInputElement>(null);
 
@@ -69,6 +70,30 @@ export function Workspace({
   const active = activeId ? byId.get(activeId) : undefined;
   const events = activeId ? snapshot.events.get(activeId) : undefined;
   const timeline = useMemo(() => (events ? buildTimeline(events) : null), [events]);
+  // Delivery states live in the messages table, not the log; every state
+  // change coincides with an event, so the event count is the refresh signal.
+  const eventsRevision = events?.length ?? 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: eventsRevision refreshes states on every new event
+  useEffect(() => {
+    if (!ready || !activeId) {
+      setAgentMessages([]);
+      return;
+    }
+    let cancelled = false;
+    store.listMessages(activeId).then(
+      ({ messages }) => {
+        if (!cancelled) setAgentMessages(messages);
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [ready, activeId, store, eventsRevision]);
+  const messageStates = useMemo(
+    () => Object.fromEntries(agentMessages.map((message) => [message.id, message])),
+    [agentMessages],
+  );
 
   // Forget tabs whose conversation no longer exists (only once the list is loaded).
   useEffect(() => {
@@ -309,6 +334,15 @@ export function Workspace({
                 onRetry={retry}
                 onOpenConversation={open}
                 onTaskRespond={respondToTask}
+                messageStates={messageStates}
+                onResendMessage={(messageId) => {
+                  if (!active) return;
+                  void store
+                    .resendMessage(messageId)
+                    .then(() => store.listMessages(active.id))
+                    .then(({ messages }) => setAgentMessages(messages))
+                    .catch(reportError);
+                }}
                 onRequestHandoff={(toHarnessId) => {
                   // The agent asked first; suggestHandoff still fills goal and
                   // next action, but the agent's target wins over the derived one.

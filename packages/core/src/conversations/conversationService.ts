@@ -328,14 +328,18 @@ export class ConversationService {
     const live = this.liveFor(conversationId);
     const messageId = this.newId();
     const runId = this.newId();
+    // core- prompts are machine-written (delegation briefs, delivered
+    // collaboration messages): they must never become the title or hijack
+    // the sidebar preview (D22 already excludes them from goal derivation).
+    const machine = text.startsWith('core-');
     const title =
-      conversation.title === DEFAULT_TITLE && conversation.lastSeq === 0
+      !machine && conversation.title === DEFAULT_TITLE && conversation.lastSeq === 0
         ? text.replace(/\s+/g, ' ').slice(0, 30)
         : conversation.title;
     this.append(
       conversationId,
       { type: 'user.message', messageId, text },
-      { title, preview: text },
+      { title, preview: machine ? conversation.preview : text },
     );
 
     // A prompt is queued when its conversation is busy, or when every global

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { conversationEventSchema, conversationSchema, isolationSchema } from './conversation';
 import { handoffSchema } from './handoff';
 import { harnessIdSchema, harnessInfoSchema } from './harness';
+import { messageRecordSchema } from './message';
 import { taskSchema, taskStatusSchema } from './task';
 
 /**
@@ -111,6 +112,16 @@ export const rpcMethods = {
     result: z.object({
       items: z.array(z.object({ conversationId: z.string(), status: taskStatusSchema })),
     }),
+  },
+  /** Agent-to-agent messages this conversation sent or received (D15). */
+  'message.list': {
+    params: z.object({ conversationId: z.string() }),
+    result: z.object({ messages: z.array(messageRecordSchema) }),
+  },
+  /** User-initiated redelivery of a message stuck in `needs_check`. Idempotent per id. */
+  'message.resend': {
+    params: z.object({ messageId: z.string() }),
+    result: z.object({ message: messageRecordSchema }),
   },
   /**
    * Stops the source agent (verified) and freezes a context package for review

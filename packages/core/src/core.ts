@@ -23,6 +23,7 @@ import { harnessEnvironment } from './env/harnessEnvironment';
 import { resolveLoginShellPath } from './env/loginShellPath';
 import { HandoffService } from './handoff/handoffService';
 import { detectHarnesses, nodeDetectDeps } from './harness/detect';
+import { MessageService } from './messaging/messageService';
 import { Store } from './store/store';
 import { TaskService } from './tasks/taskService';
 import {
@@ -165,6 +166,7 @@ export function createCore(options: CoreOptions): Core {
   }
   let tasks: TaskService | null = null;
   let handoffs: HandoffService | null = null;
+  let messageService: MessageService | null = null;
   const conversations = new ConversationService({
     store,
     adapters: options.adapters,
@@ -190,7 +192,10 @@ export function createCore(options: CoreOptions): Core {
           },
         }
       : {}),
-    onEvent: (event) => broadcast('conversation.event', event),
+    onEvent: (event) => {
+      broadcast('conversation.event', event);
+      messageService?.observeEvent(event);
+    },
     onConversation: (conversation) => {
       broadcast('conversation.updated', conversation);
       tasks?.observeConversation(conversation);
@@ -213,9 +218,17 @@ export function createCore(options: CoreOptions): Core {
     newId: options.newId ?? randomUUID,
   });
   handoffs = handoffService;
+  const messages = new MessageService({
+    store,
+    conversations,
+    now,
+    ...(options.newId ? { newId: options.newId } : {}),
+  });
+  messageService = messages;
   const collaboration = new CollaborationService({
     conversations,
     tasks: taskService,
+    messages,
     isHarnessSupported: (harnessId) => Boolean(options.adapters[harnessId]),
     ...(options.newId ? { newId: options.newId } : {}),
   });
@@ -232,6 +245,9 @@ export function createCore(options: CoreOptions): Core {
   // Handoffs interrupted by the exit: before the commit the original owner
   // stays, after it the receiver does (plan §7). Nothing is retried.
   handoffService.reconcile();
+  // Messages whose delivery outcome died with the previous process become
+  // needs_check; nothing is resent silently (ADR 0017).
+  messages.reconcile();
 
   const handlers: RpcHandlers = {
     'system.ping': () => ({
@@ -261,6 +277,8 @@ export function createCore(options: CoreOptions): Core {
     'task.list': ({ conversationId }) => taskService.list(conversationId),
     'task.inbox': () => ({ items: taskService.inbox() }),
     'task.respond': (params) => taskService.respond(params),
+    'message.list': ({ conversationId }) => ({ messages: messages.list(conversationId) }),
+    'message.resend': ({ messageId }) => ({ message: messages.resend(messageId) }),
     'handoff.suggest': (params) => handoffService.suggest(params.conversationId),
     'handoff.prepare': async (params) => ({ handoff: await handoffService.prepare(params) }),
     'handoff.commit': async (params) => handoffService.commit(params),

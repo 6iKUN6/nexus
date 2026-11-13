@@ -1,9 +1,19 @@
 import { Button } from '@arco-design/web-react';
 import { IconMessage, IconSwap } from '@arco-design/web-react/icon';
+import type { MessageRecord, MessageState } from '@nexus/protocol';
 import type { TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
 
 type Of<K extends TimelineItem['kind']> = Extract<TimelineItem, { kind: K }>;
+
+const STATE_LABEL: Record<MessageState, string> = {
+  queued: '已入队',
+  delivered: '已投递',
+  consumed: '已确认收到',
+  replied: '已回复',
+  failed: '发送失败',
+  needs_check: '需核对',
+};
 
 /**
  * A message an agent sent through the collaboration channel (D14). It is
@@ -12,21 +22,43 @@ type Of<K extends TimelineItem['kind']> = Extract<TimelineItem, { kind: K }>;
  */
 export function AgentMessageCard({
   item,
+  message,
   onOpenConversation,
+  onResend,
 }: {
   item: Of<'agentMessage'>;
+  /** Delivery state from the messages table (D15); absent while loading. */
+  message: MessageRecord | null;
   onOpenConversation: (id: string) => void;
+  onResend: (messageId: string) => void;
 }) {
   const out = item.direction === 'out';
+  const failed = message?.state === 'needs_check' || message?.state === 'failed';
   return (
     <section
       aria-label={`协作消息：${item.text.slice(0, 40)}`}
-      className="rounded-lg border border-line-1 bg-elevated px-3 py-2"
+      className={`rounded-lg border px-3 py-2 ${failed ? 'border-warn bg-elevated' : 'border-line-1 bg-elevated'}`}
     >
       <div className="flex items-center gap-2 text-xs text-fg-2">
         <span className="flex items-center gap-1 rounded bg-tint-2 px-1.5 py-0.5 font-medium">
           <IconMessage /> {out ? '发送给委派方' : '子任务消息'}
         </span>
+        {out && message && (
+          <span
+            className={
+              failed
+                ? 'rounded bg-warn-soft px-1.5 py-0.5 text-warn'
+                : 'rounded bg-tint-1 px-1.5 py-0.5 text-fg-3'
+            }
+          >
+            {STATE_LABEL[message.state]}
+          </span>
+        )}
+        {out && failed && (
+          <Button type="text" size="mini" onClick={() => onResend(item.messageId)}>
+            重发
+          </Button>
+        )}
         <Button
           type="text"
           size="mini"

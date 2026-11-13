@@ -67,7 +67,7 @@ function setup(handlers?: Partial<Record<CollaborationTool, CollabHandler>>, max
     }),
     send_message: async (conversationId, params) => {
       calls.push({ tool: 'send_message', conversationId, params });
-      return { messageId: 'message-1', state: 'recorded' };
+      return { messageId: 'message-1', state: 'delivered' };
     },
     delegate: async () => ({ taskId: 'task-2', conversationId: 'conversation-2' }),
     report_result: async () => ({ taskId: 'task-1', status: 'review' }),
@@ -119,7 +119,7 @@ describe('collaboration server', () => {
     });
     expect((await connection.next()).result).toEqual({
       messageId: 'message-1',
-      state: 'recorded',
+      state: 'delivered',
     });
     expect(calls).toEqual([
       {

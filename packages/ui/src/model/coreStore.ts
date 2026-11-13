@@ -203,6 +203,15 @@ export class CoreStore {
     return this.rpc().request('task.list', { conversationId });
   }
 
+  /** Agent-to-agent messages with delivery states (D15). */
+  listMessages(conversationId: string) {
+    return this.rpc().request('message.list', { conversationId });
+  }
+
+  resendMessage(messageId: string) {
+    return this.rpc().request('message.resend', { messageId });
+  }
+
   /** Writes a sanitized diagnostic bundle locally; the result path is local only. */
   exportDiagnostics(conversationId?: string) {
     return this.rpc().request('diagnostics.export', { conversationId });

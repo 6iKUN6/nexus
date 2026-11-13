@@ -5,6 +5,7 @@ import { createFakeAdapter } from '@nexus/adapter-fake';
 import type { Conversation, ConversationEvent, Task } from '@nexus/protocol';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ConversationService } from '../conversations/conversationService';
+import { MessageService } from '../messaging/messageService';
 import { Store } from '../store/store';
 import { TaskService } from '../tasks/taskService';
 import { CollaborationErrorCode, CollaborationService } from './service';
@@ -41,12 +42,14 @@ function setup() {
     now: Date.now,
     newId: () => `task-${Math.random().toString(36).slice(2)}`,
   });
+  const messages = new MessageService({ store, conversations });
   const collab = new CollaborationService({
     conversations,
     tasks,
+    messages,
     isHarnessSupported: (harnessId) => harnessId === 'fake' || harnessId === 'codex',
   });
-  return { store, conversations, tasks, collab, cwd };
+  return { store, conversations, tasks, messages, collab, cwd };
 }
 
 async function parentWithGoal(
@@ -120,7 +123,7 @@ describe('CollaborationService', () => {
     const result = (await collab.handlers.send_message(childConversation.id, {
       text: '需要先确认登录跳转的规则',
     })) as { messageId: string; state: string };
-    expect(result.state).toBe('recorded');
+    expect(result.state).toBe('delivered');
 
     const outbound = bodies(conversations, childConversation.id).filter(
       (body) => body.type === 'agent.message',

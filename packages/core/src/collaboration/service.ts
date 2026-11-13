@@ -8,6 +8,7 @@ import {
 } from '@nexus/protocol';
 import type { ConversationService } from '../conversations/conversationService';
 import { harnessLabel } from '../harness/catalog';
+import type { MessageService } from '../messaging/messageService';
 import type { TaskService } from '../tasks/taskService';
 import type { CollabHandler } from './server';
 
@@ -23,6 +24,7 @@ import type { CollabHandler } from './server';
 export type CollaborationServiceDeps = {
   conversations: ConversationService;
   tasks: TaskService;
+  messages: MessageService;
   /** Whether an adapter is currently available for a harness id. */
   isHarnessSupported: (harnessId: HarnessId) => boolean;
   newId?: () => string;
@@ -48,24 +50,16 @@ export class CollaborationService {
     },
 
     send_message: async (conversationId, params) => {
-      const { text } = params as { text: string };
+      const input = params as { text: string; reply_to?: string | undefined };
       const task = this.requireParentTask(conversationId);
-      const messageId = this.newId();
-      this.deps.conversations.recordCollaborationEvent(conversationId, {
-        type: 'agent.message',
-        messageId,
-        peerConversationId: task.parentConversationId,
-        direction: 'out',
-        text,
+      const message = this.deps.messages.send({
+        senderId: conversationId,
+        recipientId: task.parentConversationId,
+        taskId: task.id,
+        text: input.text,
+        replyTo: input.reply_to ?? null,
       });
-      this.deps.conversations.recordCollaborationEvent(task.parentConversationId, {
-        type: 'agent.message',
-        messageId,
-        peerConversationId: conversationId,
-        direction: 'in',
-        text,
-      });
-      return { messageId, state: 'recorded' as const };
+      return { messageId: message.id, state: message.state };
     },
 
     delegate: async (conversationId, params) => {

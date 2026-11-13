@@ -62,6 +62,8 @@ function setup(history: ConversationEvent[]) {
     'handoff.commit': unused,
     'handoff.cancel': unused,
     'conversation.configure': unused,
+    'message.list': unused,
+    'message.resend': unused,
     'handoff.suggest': unused,
     'diagnostics.export': unused,
   };

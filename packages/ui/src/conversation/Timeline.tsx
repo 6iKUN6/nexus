@@ -1,6 +1,6 @@
 import { Button, Spin } from '@arco-design/web-react';
 import { IconArrowDown } from '@arco-design/web-react/icon';
-import type { HarnessId, PermissionOption } from '@nexus/protocol';
+import type { HarnessId, MessageRecord, PermissionOption } from '@nexus/protocol';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PERSONAS, type TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
@@ -22,6 +22,9 @@ type TimelineProps = {
   onTaskRespond: (taskId: string, action: 'accept' | 'request_changes', feedback?: string) => void;
   /** An agent asked for a handoff (D14); the user still confirms it. */
   onRequestHandoff: (toHarnessId: HarnessId) => void;
+  /** Delivery states keyed by message id (D15); empty until loaded. */
+  messageStates: Record<string, MessageRecord>;
+  onResendMessage: (messageId: string) => void;
   /** Local dev-server URLs in messages become chips that open the preview pane. */
   onOpenLocalUrl?: (url: string) => void;
 };
@@ -43,6 +46,8 @@ export function Timeline({
   onOpenConversation,
   onTaskRespond,
   onRequestHandoff,
+  messageStates,
+  onResendMessage,
   onOpenLocalUrl,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -105,6 +110,8 @@ export function Timeline({
                 onOpenConversation={onOpenConversation}
                 onTaskRespond={onTaskRespond}
                 onRequestHandoff={onRequestHandoff}
+                messageStates={messageStates}
+                onResendMessage={onResendMessage}
               />
             ))
           )}
@@ -152,6 +159,8 @@ function TimelineRow({
   onOpenConversation,
   onTaskRespond,
   onRequestHandoff,
+  messageStates,
+  onResendMessage,
   onOpenLocalUrl,
 }: {
   item: TimelineItem;
@@ -162,6 +171,8 @@ function TimelineRow({
   onOpenConversation: TimelineProps['onOpenConversation'];
   onTaskRespond: TimelineProps['onTaskRespond'];
   onRequestHandoff: TimelineProps['onRequestHandoff'];
+  messageStates: TimelineProps['messageStates'];
+  onResendMessage: TimelineProps['onResendMessage'];
   onOpenLocalUrl: TimelineProps['onOpenLocalUrl'];
 }) {
   switch (item.kind) {
@@ -230,7 +241,12 @@ function TimelineRow({
           )}
           {item.kind === 'handoff' && <HandoffCard item={item} />}
           {item.kind === 'agentMessage' && (
-            <AgentMessageCard item={item} onOpenConversation={onOpenConversation} />
+            <AgentMessageCard
+              item={item}
+              message={messageStates[item.messageId] ?? null}
+              onOpenConversation={onOpenConversation}
+              onResend={onResendMessage}
+            />
           )}
           {item.kind === 'handoffRequest' && (
             <HandoffRequestCard item={item} onRequest={onRequestHandoff} />
