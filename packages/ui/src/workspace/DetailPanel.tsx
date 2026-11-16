@@ -1,6 +1,6 @@
-import { Button, Input, Message, Modal, Select, Tooltip } from '@arco-design/web-react';
+import { Button, Checkbox, Input, Message, Modal, Select, Tooltip } from '@arco-design/web-react';
 import { IconCopy, IconEdit } from '@arco-design/web-react/icon';
-import type { Conversation, HarnessId, HarnessInfo } from '@nexus/protocol';
+import type { Conversation, HarnessId, HarnessInfo, McpServerView } from '@nexus/protocol';
 import { useState } from 'react';
 import { PERSONAS, type RunSummary } from '../model/types';
 import { AgentAvatar } from './AgentAvatar';
@@ -39,14 +39,22 @@ const GOAL_NUDGE_RUNS = 5;
 
 function TaskSection({
   conversation,
+  harness,
   harnesses,
   runs,
+  mcpServers,
   onConfigure,
 }: {
   conversation: Conversation;
+  harness: HarnessInfo | undefined;
   harnesses: HarnessInfo[] | null;
   runs: RunSummary[];
-  onConfigure: (patch: { goal?: string | null; fallbackHarnessId?: HarnessId | null }) => void;
+  mcpServers: McpServerView[];
+  onConfigure: (patch: {
+    goal?: string | null;
+    fallbackHarnessId?: HarnessId | null;
+    enabledMcpIds?: string[];
+  }) => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -102,6 +110,12 @@ function TaskSection({
         </Select>
       </div>
       <p className="m-0 mt-1.5 text-[11px] text-fg-3">运行失败时，交接对话框会预填这个执行者。</p>
+      <McpOptIn
+        conversation={conversation}
+        harness={harness}
+        servers={mcpServers}
+        onConfigure={onConfigure}
+      />
       <Modal
         visible={editing}
         title="任务目标"
@@ -131,13 +145,20 @@ export function DetailPanel({
   harness,
   runs,
   harnesses,
+  mcpServers,
   onConfigure,
 }: {
   conversation: Conversation;
   harness: HarnessInfo | undefined;
   runs: RunSummary[];
   harnesses: HarnessInfo[] | null;
-  onConfigure: (patch: { goal?: string | null; fallbackHarnessId?: HarnessId | null }) => void;
+  /** Global MCP server list for the per-conversation opt-in (D23). */
+  mcpServers: McpServerView[];
+  onConfigure: (patch: {
+    goal?: string | null;
+    fallbackHarnessId?: HarnessId | null;
+    enabledMcpIds?: string[];
+  }) => void;
 }) {
   const tokens = runs.reduce(
     (sum, r) => ({
@@ -197,8 +218,10 @@ export function DetailPanel({
 
       <TaskSection
         conversation={conversation}
+        harness={harness}
         harnesses={harnesses}
         runs={runs}
+        mcpServers={mcpServers}
         onConfigure={onConfigure}
       />
 
@@ -249,5 +272,62 @@ export function DetailPanel({
         </p>
       </Section>
     </aside>
+  );
+}
+
+/** Per-conversation MCP opt-in (D23). Only Claude Code has verified injection;
+ * other harnesses get an honest disabled line instead of a fake checkbox. */
+function McpOptIn({
+  conversation,
+  harness,
+  servers,
+  onConfigure,
+}: {
+  conversation: Conversation;
+  harness: HarnessInfo | undefined;
+  servers: McpServerView[];
+  onConfigure: (patch: { enabledMcpIds?: string[] }) => void;
+}) {
+  if (servers.length === 0) return null;
+  const injectable =
+    conversation.harnessId === 'claude-code' && harness?.capabilities?.mcp === true;
+  const available = servers.filter((server) => server.enabled);
+  return (
+    <div className="mt-2 border-t border-line-1 pt-2">
+      <span className="text-[11px] text-fg-3">MCP 工具</span>
+      {!injectable ? (
+        <p className="m-0 mt-1 text-[11px] leading-relaxed text-fg-3">
+          {conversation.harnessId === 'pi'
+            ? 'pi 不支持 MCP；它的拓展在 Agents 视图管理。'
+            : conversation.harnessId === 'codex'
+              ? 'Codex 的按会话注入机制待验证，暂不可用。'
+              : '当前执行者不支持 MCP 注入。'}
+        </p>
+      ) : (
+        <div className="mt-1 flex flex-col gap-1">
+          {available.map((server) => (
+            <Checkbox
+              key={server.id}
+              checked={conversation.enabledMcpIds.includes(server.id)}
+              onChange={(checked) =>
+                onConfigure({
+                  enabledMcpIds: checked
+                    ? [...conversation.enabledMcpIds, server.id]
+                    : conversation.enabledMcpIds.filter((id) => id !== server.id),
+                })
+              }
+            >
+              <span className="text-xs text-fg-1">{server.name}</span>
+              {server.unresolvedEnv.length > 0 && (
+                <span className="ml-1 text-[11px] text-warn">缺环境变量</span>
+              )}
+            </Checkbox>
+          ))}
+          <p className="m-0 text-[11px] leading-relaxed text-fg-3">
+            勾选后下次运行生效；已运行的会话不热加载。
+          </p>
+        </div>
+      )}
+    </div>
   );
 }

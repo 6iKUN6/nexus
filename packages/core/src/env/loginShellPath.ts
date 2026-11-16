@@ -51,7 +51,7 @@ export function wellKnownBinDirs(home = homedir()): string {
 
 export type ShellRunner = (shell: string, args: string[], timeoutMs: number) => Promise<string>;
 
-const defaultShellRunner: ShellRunner = (shell, args, timeoutMs) =>
+export const defaultShellRunner: ShellRunner = (shell, args, timeoutMs) =>
   new Promise((resolve, reject) => {
     execFile(
       shell,

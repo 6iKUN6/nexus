@@ -83,4 +83,17 @@ export const MIGRATIONS: string[] = [
    CREATE INDEX messages_by_sender ON messages (sender_id);
    CREATE INDEX messages_by_recipient ON messages (recipient_id);
    CREATE INDEX messages_by_state ON messages (state);`,
+  // D23 tool management (ADR 0020): user-managed MCP servers and the
+  // per-conversation opt-in list. env holds ${VAR} placeholders, never values.
+  `ALTER TABLE conversations ADD COLUMN enabled_mcp_ids TEXT NOT NULL DEFAULT '[]';
+   CREATE TABLE mcp_servers (
+     id TEXT PRIMARY KEY,
+     name TEXT NOT NULL,
+     command TEXT NOT NULL,
+     args TEXT NOT NULL,
+     env TEXT NOT NULL,
+     enabled INTEGER NOT NULL DEFAULT 1,
+     created_at INTEGER NOT NULL,
+     updated_at INTEGER NOT NULL
+   );`,
 ];

@@ -32,6 +32,8 @@ export const conversations = sqliteTable('conversations', {
   preview: text('preview').notNull(),
   goal: text('goal'),
   fallbackHarnessId: text('fallback_harness_id').$type<HarnessId>(),
+  /** JSON string array; always present thanks to the migration default. */
+  enabledMcpIds: text('enabled_mcp_ids', { mode: 'json' }).$type<string[]>().notNull(),
   createdAt: integer('created_at').notNull(),
   updatedAt: integer('updated_at').notNull(),
 });
@@ -86,9 +88,23 @@ export const handoffs = sqliteTable('handoffs', {
   updatedAt: integer('updated_at').notNull(),
 });
 
+export const mcpServers = sqliteTable('mcp_servers', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  command: text('command').notNull(),
+  /** JSON string array (argv). */
+  args: text('args', { mode: 'json' }).$type<string[]>().notNull(),
+  /** JSON object; values may be ${VAR} placeholders, never resolved secrets. */
+  env: text('env', { mode: 'json' }).$type<Record<string, string>>().notNull(),
+  enabled: integer('enabled').notNull(),
+  createdAt: integer('created_at').notNull(),
+  updatedAt: integer('updated_at').notNull(),
+});
+
 export type ConversationRow = typeof conversations.$inferSelect;
 export type ConversationInsert = typeof conversations.$inferInsert;
 export type TaskRow = typeof tasks.$inferSelect;
 export type TaskInsert = typeof tasks.$inferInsert;
 export type HandoffRow = typeof handoffs.$inferSelect;
 export type MessageRow = typeof messages.$inferSelect;
+export type McpServerRow = typeof mcpServers.$inferSelect;

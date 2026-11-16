@@ -9,6 +9,7 @@ import {
   type ConversationEventBody,
   type HarnessId,
   type Isolation,
+  type McpServerRuntime,
   RpcError,
   type StopResult,
 } from '@nexus/protocol';
@@ -54,6 +55,10 @@ export type ConversationServiceDeps = {
     helperPath: string;
     issueToken: (conversationId: string) => string;
     revokeToken: (token: string) => void;
+  };
+  /** User-managed MCP servers (D23): resolves the runtime set per opt-in list. */
+  mcpServers?: {
+    runtimeFor: (enabledIds: string[]) => Promise<McpServerRuntime[]>;
   };
   /** Runs allowed to execute at once across all conversations. Defaults to 3. */
   maxConcurrentRuns?: number;
@@ -272,6 +277,7 @@ export class ConversationService {
       preview: `工作目录 ${basename(actualCwd)}`,
       goal: input.goal ?? null,
       fallbackHarnessId: null,
+      enabledMcpIds: [],
       createdAt: now,
       updatedAt: now,
     };
@@ -294,6 +300,7 @@ export class ConversationService {
     conversationId: string;
     goal?: string | null | undefined;
     fallbackHarnessId?: HarnessId | null | undefined;
+    enabledMcpIds?: string[] | undefined;
   }): Conversation {
     const conversation = this.require(input.conversationId);
     if (input.fallbackHarnessId && !this.deps.adapters[input.fallbackHarnessId]) {
@@ -302,9 +309,19 @@ export class ConversationService {
         `暂不支持 ${input.fallbackHarnessId} 作为备用执行者`,
       );
     }
+    // Opt-in ids must exist; silently dropping a typo would look like the
+    // server failed to load rather than a stale UI list.
+    if (input.enabledMcpIds !== undefined) {
+      const known = new Set(this.deps.store.listMcpServers().map((server) => server.id));
+      const unknown = input.enabledMcpIds.filter((serverId) => !known.has(serverId));
+      if (unknown.length > 0) {
+        throw new RpcError(ErrorCode.NotFound, `未知的 MCP server：${unknown.join('、')}`);
+      }
+    }
     const patch: ConversationPatch = {};
     if (input.goal !== undefined) patch.goal = input.goal;
     if (input.fallbackHarnessId !== undefined) patch.fallbackHarnessId = input.fallbackHarnessId;
+    if (input.enabledMcpIds !== undefined) patch.enabledMcpIds = input.enabledMcpIds;
     if (Object.keys(patch).length === 0) return conversation;
     let next: Conversation;
     try {
@@ -590,9 +607,15 @@ export class ConversationService {
     // resumed session gets a new one instead of inheriting an old lease.
     const token = collab ? collab.issueToken(conversation.id) : null;
     if (token) this.collabTokens.set(conversation.id, token);
+    // D23: resolve the conversation's opted-in MCP servers. Placeholders are
+    // resolved inside the service; adapters only ever see values.
+    const mcpServers = this.deps.mcpServers
+      ? await this.deps.mcpServers.runtimeFor(conversation.enabledMcpIds)
+      : [];
     const options = {
       cwd: conversation.cwd,
       ...runtime,
+      ...(mcpServers.length > 0 ? { mcpServers } : {}),
       ...(collab && token
         ? {
             env: {

@@ -20,9 +20,11 @@ import { ConversationService, type HarnessRuntime } from './conversations/conver
 import { exportDiagnostics } from './diagnostics/diagnostics';
 import { installLogCapture } from './diagnostics/logBuffer';
 import { harnessEnvironment } from './env/harnessEnvironment';
+import { resolveLoginShellEnv } from './env/loginShellEnv';
 import { resolveLoginShellPath } from './env/loginShellPath';
 import { HandoffService } from './handoff/handoffService';
 import { detectHarnesses, nodeDetectDeps } from './harness/detect';
+import { McpService } from './mcp/mcpService';
 import { MessageService } from './messaging/messageService';
 import { Store } from './store/store';
 import { TaskService } from './tasks/taskService';
@@ -56,6 +58,8 @@ export type CoreOptions = {
   /** Injected in tests; defaults to real PATH resolution + filesystem detection. */
   detectHarnesses?: (pathValue: string) => Promise<HarnessInfo[]>;
   resolvePath?: () => Promise<string>;
+  /** Login-shell environment for MCP placeholder resolution (D23). */
+  resolveEnv?: () => Promise<Record<string, string>>;
   worktrees?: WorktreeManager;
   gitRun?: GitRun;
   /** Global cap on concurrent harness runs (plan §7). Defaults to 3. */
@@ -86,15 +90,22 @@ export function createCore(options: CoreOptions): Core {
   const now = options.now ?? Date.now;
   const detect = options.detectHarnesses ?? ((path) => detectHarnesses(nodeDetectDeps(path)));
   const resolvePath = options.resolvePath ?? (() => resolveLoginShellPath());
+  const resolveEnv = options.resolveEnv ?? (() => resolveLoginShellEnv());
   const startedAt = now();
   const ports = new Set<RpcPort>();
 
   let pathValue: Promise<string> | null = null;
+  let envValue: Promise<Record<string, string>> | null = null;
   let harnesses: Promise<HarnessInfo[]> | null = null;
 
   const loadPath = () => {
     pathValue ??= resolvePath();
     return pathValue;
+  };
+
+  const loadEnv = () => {
+    envValue ??= resolveEnv();
+    return envValue;
   };
 
   const loadHarnesses = (refresh: boolean) => {
@@ -167,6 +178,7 @@ export function createCore(options: CoreOptions): Core {
   let tasks: TaskService | null = null;
   let handoffs: HandoffService | null = null;
   let messageService: MessageService | null = null;
+  const mcpServers = new McpService({ store, loginEnv: loadEnv, now });
   const conversations = new ConversationService({
     store,
     adapters: options.adapters,
@@ -177,6 +189,7 @@ export function createCore(options: CoreOptions): Core {
       : { maxConcurrentRuns: options.maxConcurrentRuns }),
     worktrees: options.worktrees ?? createWorktreeManager(worktreeDir, options.gitRun),
     gitRun: options.gitRun ?? realGitRun,
+    mcpServers,
     runtimeFor: async (harnessId): Promise<HarnessRuntime> => {
       const [path, list] = await Promise.all([loadPath(), loadHarnesses(false)]);
       const info = list.find((h) => h.id === harnessId);
@@ -280,6 +293,9 @@ export function createCore(options: CoreOptions): Core {
     'task.respond': (params) => taskService.respond(params),
     'task.evidence': async ({ taskId }) => ({ evidence: await taskService.evidence(taskId) }),
     'message.list': ({ conversationId }) => ({ messages: messages.list(conversationId) }),
+    'mcp.list': async () => ({ servers: await mcpServers.list() }),
+    'mcp.upsert': async ({ server }) => ({ server: await mcpServers.upsert(server) }),
+    'mcp.remove': ({ id }) => ({ removed: mcpServers.remove(id) }),
     'message.resend': ({ messageId }) => ({ message: messages.resend(messageId) }),
     'handoff.suggest': (params) => handoffService.suggest(params.conversationId),
     'handoff.prepare': async (params) => ({ handoff: await handoffService.prepare(params) }),

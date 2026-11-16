@@ -114,6 +114,41 @@ check(
     `document.body.innerText.includes('权限卡片') && document.body.innerText.includes('已认证')`,
   ),
 );
+// D23: MCP server management lives in the Agents view
+await ev(`document.querySelector('[aria-label="添加 MCP server"]').click()`);
+const mcpDlg = `.arco-modal-wrapper:not([style*="display: none"]) .arco-modal`;
+await until(`!!document.querySelector('${mcpDlg} input[aria-label="server 名称"]')`, 'mcp dialog');
+await type(`${mcpDlg} input[aria-label="server 名称"]`, '测试 server');
+await type(`${mcpDlg} input[aria-label="server 命令"]`, 'npx');
+await type(
+  `${mcpDlg} textarea[aria-label="server 参数"]`,
+  '-y\n@modelcontextprotocol/server-everything',
+);
+await type(
+  `${mcpDlg} textarea[aria-label="server 环境变量"]`,
+  'API_KEY=$' + '{NEXUS_TEST_MISSING}',
+);
+await ev(
+  `[...document.querySelectorAll('${mcpDlg} button')].find(b => b.innerText.trim() === '保存').click()`,
+);
+await until(`document.body.innerText.includes('测试 server')`, 'server listed');
+check('MCP server 添加后出现在列表', true);
+check('未解析的占位符有标注', await ev(`document.body.innerText.includes('缺环境变量')`));
+check(
+  '持久化到 core（重新拉取仍在）',
+  await ev(`document.body.innerText.includes('@modelcontextprotocol/server-everything')`),
+);
+// Delete again so the restart steps do not carry extra state.
+await ev(`document.querySelector('[aria-label="删除 测试 server"]').click()`);
+await until(
+  `[...document.querySelectorAll('.arco-popconfirm button, .arco-popover button')].some(b => b.innerText.trim() === '删除')`,
+  'delete confirm',
+);
+await ev(
+  `[...document.querySelectorAll('.arco-popconfirm button, .arco-popover button')].find(b => b.innerText.trim() === '删除').click()`,
+);
+await until(`!document.body.innerText.includes('测试 server')`, 'server removed');
+check('MCP server 可删除', true);
 await click('text=会话');
 
 // --- M3 delegation: delegate to Fake, child asks permission, review, accept ---

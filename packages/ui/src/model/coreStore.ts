@@ -4,6 +4,8 @@ import type {
   Handoff,
   HarnessId,
   HarnessInfo,
+  McpServerInput,
+  McpServerView,
   RpcClient,
   TaskStatus,
 } from '@nexus/protocol';
@@ -28,6 +30,8 @@ export type CoreSnapshot = {
   events: ReadonlyMap<string, readonly ConversationEvent[]>;
   /** Conversations with delegated tasks awaiting the user (M3 inbox). */
   taskInbox: ReadonlyArray<{ conversationId: string; status: TaskStatus }>;
+  /** User-managed MCP servers (D23); empty until the first list resolves. */
+  mcpServers: McpServerView[];
 };
 
 type Listener = () => void;
@@ -43,6 +47,7 @@ export class CoreStore {
     conversations: [],
     events: new Map(),
     taskInbox: [],
+    mcpServers: [],
   };
   private readonly listeners = new Set<Listener>();
   private client: RpcClient | null = null;
@@ -82,6 +87,7 @@ export class CoreStore {
       });
       void this.refreshHarnesses(false);
       void this.refreshTaskInbox().catch(() => {});
+      void this.refreshMcpServers().catch(() => {});
     } catch (error) {
       this.set({ status: 'failed', error: error instanceof Error ? error.message : String(error) });
     }
@@ -90,6 +96,22 @@ export class CoreStore {
   async refreshHarnesses(refresh: boolean): Promise<void> {
     const { harnesses } = await this.rpc().request('harness.list', { refresh });
     this.set({ harnesses });
+  }
+
+  /** User-managed MCP servers (D23). Mutations refresh the list in place. */
+  async refreshMcpServers(): Promise<void> {
+    const { servers } = await this.rpc().request('mcp.list', {});
+    this.set({ mcpServers: servers });
+  }
+
+  async upsertMcpServer(server: McpServerInput): Promise<void> {
+    await this.rpc().request('mcp.upsert', { server });
+    await this.refreshMcpServers();
+  }
+
+  async removeMcpServer(id: string): Promise<void> {
+    await this.rpc().request('mcp.remove', { id });
+    await this.refreshMcpServers();
   }
 
   /** Loads (or tops up) the event log of a conversation. Idempotent while in flight. */
@@ -123,6 +145,7 @@ export class CoreStore {
     conversationId: string;
     goal?: string | null;
     fallbackHarnessId?: HarnessId | null;
+    enabledMcpIds?: string[];
   }) {
     const { conversation } = await this.rpc().request('conversation.configure', input);
     this.upsert(conversation);

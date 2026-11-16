@@ -1,5 +1,6 @@
 import type { AgentEvent } from './events';
 import type { AuthStatus, HarnessCapabilities } from './harness';
+import type { McpServerRuntime } from './mcpServer';
 
 /**
  * Contract every harness adapter implements (see 开发落地计划.md §9.2).
@@ -32,6 +33,12 @@ export type CreateSessionOptions = {
    * hand the helper to the harness, others just pass the env vars through.
    */
   collaboration?: { socketPath: string; token: string; helperPath: string };
+  /**
+   * User-managed MCP servers this conversation opted into (D23, ADR 0020).
+   * Additive like the collaboration channel; adapters without MCP support
+   * ignore it. Env is already resolved (placeholders never reach adapters).
+   */
+  mcpServers?: McpServerRuntime[];
 };
 
 /** Result of stopping a session: what the caller may safely claim afterwards. */

@@ -56,6 +56,28 @@ describe('claude adapter session', () => {
     expect(calls[1]?.options.sessionId).toBeUndefined();
   });
 
+  it('merges user MCP servers next to the collaboration channel (D23)', async () => {
+    const { impl, calls } = fakeQuery(async function* () {
+      yield text('ok');
+      yield result;
+    });
+    const session = await createClaudeAdapter({ queryImpl: impl }).createSession({
+      ...sessionOptions,
+      collaboration: { socketPath: '/tmp/s.sock', token: 'tok', helperPath: '/tmp/helper' },
+      mcpServers: [
+        { key: 'nx_ab12cd34', command: 'fs-server', args: ['--root', '/tmp'], env: { K: 'v' } },
+      ],
+    });
+    await collect(session, 'r1');
+
+    const servers = calls[0]?.options.mcpServers;
+    expect(Object.keys(servers ?? {}).sort()).toEqual(['nexus', 'nx_ab12cd34'].sort());
+    expect(servers).toMatchObject({
+      nexus: { type: 'stdio', command: '/tmp/helper', args: ['mcp'] },
+      nx_ab12cd34: { type: 'stdio', command: 'fs-server', args: ['--root', '/tmp'] },
+    });
+  });
+
   it('resumeSession resumes from the first prompt', async () => {
     const { impl, calls } = fakeQuery(async function* () {
       yield result;

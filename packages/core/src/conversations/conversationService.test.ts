@@ -100,6 +100,47 @@ describe('ConversationService', () => {
     expect(saved?.preview).toContain('收到');
   });
 
+  it('passes opted-in MCP servers to the adapter and validates configure ids', async () => {
+    const seen: CreateSessionOptions[] = [];
+    const base = createFakeAdapter();
+    const adapter: AgentAdapter = {
+      ...base,
+      createSession: (options) => {
+        seen.push(options);
+        return base.createSession(options);
+      },
+    };
+    const { store, service } = setup(adapter, ':memory:', undefined, undefined, {
+      mcpServers: {
+        runtimeFor: async (ids) =>
+          ids.map((id) => ({ key: `nx_${id}`, command: 'cmd', args: [], env: {} })),
+      },
+    });
+    const c = await service.create({ harnessId: 'fake', cwd: tempDir() });
+
+    // Unknown ids are rejected instead of silently dropped.
+    expect(() => service.configure({ conversationId: c.id, enabledMcpIds: ['nope'] })).toThrow(
+      /未知的 MCP server/,
+    );
+
+    store.upsertMcpServer({
+      id: 'srv-1',
+      name: 'x',
+      command: 'cmd',
+      args: [],
+      env: {},
+      enabled: 1,
+      createdAt: 1,
+      updatedAt: 1,
+    });
+    const updated = service.configure({ conversationId: c.id, enabledMcpIds: ['srv-1'] });
+    expect(updated.enabledMcpIds).toEqual(['srv-1']);
+
+    service.send(c.id, 'hi');
+    await waitFor(() => seen.length > 0);
+    expect(seen[0]?.mcpServers).toEqual([{ key: 'nx_srv-1', command: 'cmd', args: [], env: {} }]);
+  });
+
   it('issues a collaboration token per session and revokes it when the session stops', async () => {
     const seen: CreateSessionOptions[] = [];
     const revoked: string[] = [];

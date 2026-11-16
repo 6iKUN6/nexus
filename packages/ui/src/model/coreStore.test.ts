@@ -24,6 +24,7 @@ const conversation: Conversation = {
   preview: '',
   goal: null,
   fallbackHarnessId: null,
+  enabledMcpIds: [],
   createdAt: 1,
   updatedAt: 1,
 };
@@ -65,6 +66,9 @@ function setup(history: ConversationEvent[]) {
     'message.list': unused,
     'message.resend': unused,
     'task.evidence': unused,
+    'mcp.list': unused,
+    'mcp.upsert': unused,
+    'mcp.remove': unused,
     'handoff.suggest': unused,
     'diagnostics.export': unused,
   };

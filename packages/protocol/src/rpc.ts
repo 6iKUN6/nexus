@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { conversationEventSchema, conversationSchema, isolationSchema } from './conversation';
 import { handoffSchema } from './handoff';
 import { harnessIdSchema, harnessInfoSchema } from './harness';
+import { mcpServerConfigSchema, mcpServerInputSchema, mcpServerViewSchema } from './mcpServer';
 import { messageRecordSchema } from './message';
 import { taskEvidenceSchema, taskSchema, taskStatusSchema } from './task';
 
@@ -75,6 +76,8 @@ export const rpcMethods = {
       conversationId: z.string(),
       goal: z.string().trim().max(500).nullable().optional(),
       fallbackHarnessId: harnessIdSchema.nullable().optional(),
+      /** Replace the whole opt-in list (D23); undefined leaves it untouched. */
+      enabledMcpIds: z.array(z.string()).optional(),
     }),
     result: z.object({ conversation: conversationSchema }),
   },
@@ -119,6 +122,22 @@ export const rpcMethods = {
     }),
   },
   /** Agent-to-agent messages this conversation sent or received (D15). */
+  /** User-managed MCP servers (D23, ADR 0020). unresolvedEnv lists variable
+   * names whose ${VAR} placeholder has no value in the login-shell env. */
+  'mcp.list': {
+    params: z.object({}),
+    result: z.object({
+      servers: z.array(mcpServerConfigSchema.extend({ unresolvedEnv: z.array(z.string()) })),
+    }),
+  },
+  'mcp.upsert': {
+    params: z.object({ server: mcpServerInputSchema }),
+    result: z.object({ server: mcpServerConfigSchema }),
+  },
+  'mcp.remove': {
+    params: z.object({ id: z.string() }),
+    result: z.object({ removed: z.boolean() }),
+  },
   'message.list': {
     params: z.object({ conversationId: z.string() }),
     result: z.object({ messages: z.array(messageRecordSchema) }),

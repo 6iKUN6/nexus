@@ -1,11 +1,19 @@
 import { Button, Input, Radio, Tooltip } from '@arco-design/web-react';
 import { IconDownload, IconPlus, IconSearch } from '@arco-design/web-react/icon';
-import type { Conversation, HarnessCapabilities, HarnessInfo, TaskStatus } from '@nexus/protocol';
+import type {
+  Conversation,
+  HarnessCapabilities,
+  HarnessInfo,
+  McpServerInput,
+  McpServerView,
+  TaskStatus,
+} from '@nexus/protocol';
 import { type Ref, useState } from 'react';
 import { NexusMark } from '../brand/NexusMark';
 import { PERSONAS } from '../model/types';
 import type { ThemePreference } from '../theme/themePreference';
 import { AgentAvatar } from './AgentAvatar';
+import { McpServersSection } from './McpServersSection';
 import { StatusIcon } from './StatusLabel';
 import { ThemeSwitcher } from './ThemeSwitcher';
 
@@ -20,6 +28,10 @@ type SidebarProps = {
   taskInbox: ReadonlyArray<{ conversationId: string; status: TaskStatus }>;
   theme: ThemePreference;
   onThemeChange: (theme: ThemePreference) => void;
+  /** User-managed MCP servers (D23), managed from the Agents view. */
+  mcpServers: McpServerView[];
+  onMcpUpsert: (input: McpServerInput) => void;
+  onMcpRemove: (id: string) => void;
   searchRef: Ref<HTMLInputElement>;
   exporting: boolean;
   onExportDiagnostics: () => void;
@@ -158,6 +170,9 @@ export function Sidebar(props: SidebarProps) {
             conversations={props.conversations}
             harnesses={props.harnesses}
             onOpen={props.onOpen}
+            mcpServers={props.mcpServers}
+            onMcpUpsert={props.onMcpUpsert}
+            onMcpRemove={props.onMcpRemove}
           />
         )}
       </nav>
@@ -310,15 +325,22 @@ function AgentsView({
   conversations,
   harnesses,
   onOpen,
+  mcpServers,
+  onMcpUpsert,
+  onMcpRemove,
 }: {
   conversations: Conversation[];
   harnesses: HarnessInfo[] | null;
   onOpen: (id: string) => void;
+  mcpServers: McpServerView[];
+  onMcpUpsert: (input: McpServerInput) => void;
+  onMcpRemove: (id: string) => void;
 }) {
   const visible = (harnesses ?? []).filter((h) => h.id !== 'dsh');
   if (!harnesses) return <p className="px-2 py-4 text-center text-xs text-fg-3">检测中…</p>;
   return (
     <>
+      <McpServersSection servers={mcpServers} onUpsert={onMcpUpsert} onRemove={onMcpRemove} />
       {visible.map((h) => {
         const owned = conversations.filter((c) => c.harnessId === h.id);
         return (

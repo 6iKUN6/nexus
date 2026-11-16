@@ -84,7 +84,7 @@ function createClaudeSession(
   queryImpl: QueryFn,
   externalId: string,
   existing: boolean,
-  { cwd, executablePath, env, collaboration }: CreateSessionOptions,
+  { cwd, executablePath, env, collaboration, mcpServers }: CreateSessionOptions,
 ): AdapterSession {
   let hasHistory = existing;
   let active: { runId: string; abort: AbortController } | null = null;
@@ -169,20 +169,37 @@ function createClaudeSession(
         // It is additive: built-in tools keep working exactly as before, and
         // its five terse tools cost only their definitions. Never alwaysLoad —
         // the SDK may defer them behind tool search, which is what we want.
-        ...(collaboration
+        // User-managed servers (D23) merge additively next to the
+        // collaboration channel; keys are core-derived safe tokens.
+        ...(collaboration || (mcpServers && mcpServers.length > 0)
           ? {
               mcpServers: {
-                nexus: {
-                  type: 'stdio' as const,
-                  // The launcher core generated: it knows how to start the
-                  // bundled helper and forwards these env vars unchanged.
-                  command: collaboration.helperPath,
-                  args: ['mcp'],
-                  env: {
-                    NEXUS_SOCKET: collaboration.socketPath,
-                    NEXUS_TOKEN: collaboration.token,
-                  },
-                },
+                ...(collaboration
+                  ? {
+                      nexus: {
+                        type: 'stdio' as const,
+                        // The launcher core generated: it knows how to start
+                        // the bundled helper and forwards these env vars.
+                        command: collaboration.helperPath,
+                        args: ['mcp'],
+                        env: {
+                          NEXUS_SOCKET: collaboration.socketPath,
+                          NEXUS_TOKEN: collaboration.token,
+                        },
+                      },
+                    }
+                  : {}),
+                ...Object.fromEntries(
+                  (mcpServers ?? []).map((server) => [
+                    server.key,
+                    {
+                      type: 'stdio' as const,
+                      command: server.command,
+                      args: server.args,
+                      env: server.env,
+                    },
+                  ]),
+                ),
               },
             }
           : {}),

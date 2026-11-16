@@ -31,6 +31,7 @@ const conversation = (over: Partial<Conversation> = {}): Conversation => ({
   preview: '工作目录 repo',
   goal: null,
   fallbackHarnessId: null,
+  enabledMcpIds: [],
   createdAt: 1,
   updatedAt: 1,
   ...over,

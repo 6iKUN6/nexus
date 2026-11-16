@@ -358,6 +358,9 @@ export function Workspace({
         searchRef={searchRef}
         exporting={exporting}
         onExportDiagnostics={() => void exportDiagnostics()}
+        mcpServers={snapshot.mcpServers}
+        onMcpUpsert={(input) => void store.upsertMcpServer(input).catch(reportError)}
+        onMcpRemove={(id) => void store.removeMcpServer(id).catch(reportError)}
       />
       <div className="flex min-w-0 flex-1 flex-col bg-surface-1">
         <TabStrip
@@ -480,6 +483,7 @@ export function Workspace({
                     harness={harness}
                     runs={timeline?.runs ?? []}
                     harnesses={snapshot.harnesses}
+                    mcpServers={snapshot.mcpServers}
                     onConfigure={(patch) => {
                       void store
                         .configureConversation({ conversationId: active.id, ...patch })
@@ -497,6 +501,7 @@ export function Workspace({
                     harness={harness}
                     runs={timeline?.runs ?? []}
                     harnesses={snapshot.harnesses}
+                    mcpServers={snapshot.mcpServers}
                     onConfigure={(patch) => {
                       void store
                         .configureConversation({ conversationId: active.id, ...patch })

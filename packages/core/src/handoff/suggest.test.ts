@@ -16,6 +16,7 @@ const conversation = (over: Partial<Conversation> = {}): Conversation => ({
   preview: '',
   goal: null,
   fallbackHarnessId: null,
+  enabledMcpIds: [],
   createdAt: 1,
   updatedAt: 1,
   ...over,

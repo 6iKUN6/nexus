@@ -52,6 +52,8 @@ export const conversationSchema = z.object({
   goal: z.string().nullable(),
   /** Pre-selected receiver for a one-click handoff after a failure (D22). */
   fallbackHarnessId: harnessIdSchema.nullable(),
+  /** User-managed MCP servers this conversation opted into (D23, ADR 0020). */
+  enabledMcpIds: z.array(z.string()),
   createdAt: z.number().int(),
   updatedAt: z.number().int(),
 });

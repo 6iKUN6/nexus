@@ -5,6 +5,7 @@ export * from './events';
 export * from './handoff';
 export * from './harness';
 export * from './localUrl';
+export * from './mcpServer';
 export * from './memoryPort';
 export * from './message';
 export * from './rpc';

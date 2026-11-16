@@ -20,7 +20,9 @@ import {
   events,
   type HandoffRow,
   handoffs,
+  type McpServerRow,
   type MessageRow,
+  mcpServers,
   messages,
   type TaskRow,
   tasks,
@@ -49,6 +51,7 @@ export type ConversationPatch = Partial<
     | 'ownerVersion'
     | 'goal'
     | 'fallbackHarnessId'
+    | 'enabledMcpIds'
   >
 >;
 
@@ -113,6 +116,32 @@ export class Store {
       .orderBy(desc(conversations.updatedAt))
       .all()
       .map(toConversation);
+  }
+
+  listMcpServers(): McpServerRow[] {
+    return this.db.select().from(mcpServers).orderBy(mcpServers.name).all();
+  }
+
+  upsertMcpServer(row: McpServerRow): void {
+    this.db
+      .insert(mcpServers)
+      .values(row)
+      .onConflictDoUpdate({
+        target: mcpServers.id,
+        set: {
+          name: row.name,
+          command: row.command,
+          args: row.args,
+          env: row.env,
+          enabled: row.enabled,
+          updatedAt: row.updatedAt,
+        },
+      })
+      .run();
+  }
+
+  deleteMcpServer(id: string): boolean {
+    return this.db.delete(mcpServers).where(eq(mcpServers.id, id)).run().changes > 0;
   }
 
   updateConversation(id: string, patch: ConversationPatch, now: number): Conversation {
