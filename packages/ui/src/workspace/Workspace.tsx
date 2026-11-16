@@ -105,6 +105,21 @@ export function Workspace({
     });
   }, [ready, byId, setUi]);
 
+  // Three-column layout budget: chat needs ≥440px to stay readable, the
+  // detail inspector is 260px and the preview ≥300px. Below that the detail
+  // panel degrades to a slide-over so nothing readable gets squeezed.
+  const rowRef = useRef<HTMLDivElement>(null);
+  const [detailOverlay, setDetailOverlay] = useState(false);
+  useEffect(() => {
+    const el = rowRef.current;
+    if (!el) return;
+    const update = () => setDetailOverlay(el.clientWidth < (ui.previewOpen ? 1060 : 720));
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [ui.previewOpen]);
+
   // Esc dismisses transient panels: the detail slide-over first, then preview.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
@@ -320,8 +335,8 @@ export function Workspace({
           onNew={() => setCreating(true)}
         />
         {active ? (
-          <div className="relative flex min-h-0 flex-1">
-            <main className="flex min-w-0 flex-1 flex-col">
+          <div ref={rowRef} className="relative flex min-h-0 flex-1">
+            <main className="flex min-w-[440px] flex-1 flex-col">
               <ConversationHeader
                 conversation={active}
                 detailOpen={ui.detailOpen}
@@ -400,32 +415,46 @@ export function Workspace({
                 }}
               />
             </main>
-            {ui.detailOpen && (
-              // Slide-over instead of a third column: detail is transient
-              // inspection, so it floats above the conversation instead of
-              // squeezing the chat column (which keeps its reading width).
-              <div className="nx-panel-in absolute inset-y-0 right-0 z-20 flex w-[320px] flex-col border-l border-line-2 bg-surface-1 shadow-mac">
-                <Button
-                  size="mini"
-                  type="text"
-                  icon={<IconClose />}
-                  aria-label="关闭详情"
-                  className="absolute top-2 right-2 z-10"
-                  onClick={() => setUi((s) => ({ ...s, detailOpen: false }))}
-                />
-                <DetailPanel
-                  conversation={active}
-                  harness={harness}
-                  runs={timeline?.runs ?? []}
-                  harnesses={snapshot.harnesses}
-                  onConfigure={(patch) => {
-                    void store
-                      .configureConversation({ conversationId: active.id, ...patch })
-                      .catch(reportError);
-                  }}
-                />
-              </div>
-            )}
+            {ui.detailOpen &&
+              (detailOverlay ? (
+                // Not enough room for three columns: the inspector degrades
+                // to a slide-over instead of squeezing the chat column.
+                <div className="nx-panel-in absolute inset-y-0 right-0 z-20 flex w-[320px] flex-col border-l border-line-2 bg-surface-1 shadow-mac">
+                  <Button
+                    size="mini"
+                    type="text"
+                    icon={<IconClose />}
+                    aria-label="关闭详情"
+                    className="absolute top-2 right-2 z-10"
+                    onClick={() => setUi((s) => ({ ...s, detailOpen: false }))}
+                  />
+                  <DetailPanel
+                    conversation={active}
+                    harness={harness}
+                    runs={timeline?.runs ?? []}
+                    harnesses={snapshot.harnesses}
+                    onConfigure={(patch) => {
+                      void store
+                        .configureConversation({ conversationId: active.id, ...patch })
+                        .catch(reportError);
+                    }}
+                  />
+                </div>
+              ) : (
+                <div className="flex w-[260px] shrink-0 flex-col border-l border-line-2 bg-surface-1">
+                  <DetailPanel
+                    conversation={active}
+                    harness={harness}
+                    runs={timeline?.runs ?? []}
+                    harnesses={snapshot.harnesses}
+                    onConfigure={(patch) => {
+                      void store
+                        .configureConversation({ conversationId: active.id, ...patch })
+                        .catch(reportError);
+                    }}
+                  />
+                </div>
+              ))}
             {ui.previewOpen && (
               <PreviewPanel
                 url={ui.previewUrls[active.id] ?? ''}
