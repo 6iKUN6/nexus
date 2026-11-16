@@ -1,6 +1,6 @@
 import { Button } from '@arco-design/web-react';
 import { IconLaunch, IconMessage, IconPublic, IconSwap } from '@arco-design/web-react/icon';
-import type { MessageRecord, MessageState } from '@nexus/protocol';
+import { type MessageRecord, type MessageState, normalizeLocalUrl } from '@nexus/protocol';
 import type { TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
 
@@ -121,6 +121,9 @@ export function PreviewRequestCard({
   item: Of<'previewRequest'>;
   onOpenLocalUrl: (url: string) => void;
 }) {
+  // Local addresses can be embedded; anything else (ADR 0014 whitelist) only
+  // gets the system-browser route. Nothing opens until the user clicks.
+  const previewable = normalizeLocalUrl(item.url) !== null;
   return (
     <section
       aria-label={`预览请求：${item.url}`}
@@ -133,22 +136,40 @@ export function PreviewRequestCard({
         <span className="nx-selectable min-w-0 flex-1 truncate font-mono text-[11px] text-fg-1">
           {item.url}
         </span>
-        <Button
-          type="primary"
-          size="mini"
-          icon={<IconPublic />}
-          onClick={() => onOpenLocalUrl(item.url)}
-        >
-          打开预览
-        </Button>
-        <Button
-          type="text"
-          size="mini"
-          icon={<IconLaunch />}
-          aria-label="在浏览器中打开"
-          onClick={() => window.open(item.url, '_blank')}
-        />
+        {previewable ? (
+          <>
+            <Button
+              type="primary"
+              size="mini"
+              icon={<IconPublic />}
+              onClick={() => onOpenLocalUrl(item.url)}
+            >
+              打开预览
+            </Button>
+            <Button
+              type="text"
+              size="mini"
+              icon={<IconLaunch />}
+              aria-label="在浏览器中打开"
+              onClick={() => window.open(item.url, '_blank')}
+            />
+          </>
+        ) : (
+          <Button
+            type="primary"
+            size="mini"
+            icon={<IconLaunch />}
+            onClick={() => window.open(item.url, '_blank')}
+          >
+            在浏览器打开
+          </Button>
+        )}
       </div>
+      {!previewable && (
+        <p className="m-0 mt-1 text-[11px] text-fg-3">
+          内置预览仅支持本机地址，外部网页请用系统浏览器打开。
+        </p>
+      )}
     </section>
   );
 }

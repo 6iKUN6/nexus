@@ -18,10 +18,21 @@ import {
 import { Timeline } from '../conversation/Timeline';
 import { buildTimeline } from '../model/buildTimeline';
 import type { CoreSnapshot, CoreStore } from '../model/coreStore';
+import {
+  CHAT_MIN,
+  DETAIL_DEFAULT,
+  DETAIL_OVERLAY_WIDTH,
+  DETAIL_RANGE,
+  detailNeedsOverlay,
+  PREVIEW_DEFAULT,
+  PREVIEW_RANGE,
+  panelMaxWidth,
+} from '../model/panelLayout';
 import { useUiState } from '../model/useUiState';
 import type { ThemePreference } from '../theme/themePreference';
 import { DetailPanel } from './DetailPanel';
 import { PreviewPanel } from './PreviewPanel';
+import { ResizeHandle } from './ResizeHandle';
 import { Sidebar } from './Sidebar';
 import { TabStrip } from './TabStrip';
 
@@ -105,20 +116,43 @@ export function Workspace({
     });
   }, [ready, byId, setUi]);
 
-  // Three-column layout budget: chat needs ≥440px to stay readable, the
-  // detail inspector is 260px and the preview ≥300px. Below that the detail
-  // panel degrades to a slide-over so nothing readable gets squeezed.
+  // Three-column layout budget: the chat column keeps its readable width and
+  // both side panels are user-resizable. When the row can't fit chat + the
+  // panels at their current widths, the detail inspector degrades to a
+  // slide-over instead of squeezing anything.
   const rowRef = useRef<HTMLDivElement>(null);
-  const [detailOverlay, setDetailOverlay] = useState(false);
+  const [rowWidth, setRowWidth] = useState(0);
+  // The row only exists while a conversation is open, so the observer must
+  // (re)attach when one appears — a mount-once effect would measure nothing.
+  const hasActive = active !== undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: hasActive re-attaches the observer when the row mounts with the first conversation
   useEffect(() => {
     const el = rowRef.current;
     if (!el) return;
-    const update = () => setDetailOverlay(el.clientWidth < (ui.previewOpen ? 1060 : 720));
+    const update = () => setRowWidth(el.clientWidth);
     update();
     const observer = new ResizeObserver(update);
     observer.observe(el);
-    return () => observer.disconnect();
-  }, [ui.previewOpen]);
+    window.addEventListener('resize', update);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', update);
+    };
+  }, [hasActive]);
+  const detailOverlay =
+    rowWidth > 0 && detailNeedsOverlay(rowWidth, ui.detailWidth, ui.previewWidth, ui.previewOpen);
+  // A drag may never push the chat column below its minimum; whatever space
+  // the other open panel needs is reserved first.
+  const detailMax = panelMaxWidth(
+    rowWidth,
+    CHAT_MIN + (ui.previewOpen ? ui.previewWidth : 0),
+    DETAIL_RANGE,
+  );
+  const previewMax = panelMaxWidth(
+    rowWidth,
+    CHAT_MIN + (ui.detailOpen && !detailOverlay ? ui.detailWidth : 0),
+    PREVIEW_RANGE,
+  );
 
   // Esc dismisses transient panels: the detail slide-over first, then preview.
   useEffect(() => {
@@ -415,11 +449,24 @@ export function Workspace({
                 }}
               />
             </main>
+            {ui.detailOpen && !detailOverlay && (
+              <ResizeHandle
+                label="调整详情面板宽度"
+                value={ui.detailWidth}
+                min={DETAIL_RANGE.min}
+                max={detailMax}
+                onChange={(width) => setUi((s) => ({ ...s, detailWidth: width }))}
+                onReset={() => setUi((s) => ({ ...s, detailWidth: DETAIL_DEFAULT }))}
+              />
+            )}
             {ui.detailOpen &&
               (detailOverlay ? (
                 // Not enough room for three columns: the inspector degrades
                 // to a slide-over instead of squeezing the chat column.
-                <div className="nx-panel-in absolute inset-y-0 right-0 z-20 flex w-[320px] flex-col border-l border-line-2 bg-surface-1 shadow-mac">
+                <div
+                  className="nx-panel-in absolute inset-y-0 right-0 z-20 flex flex-col border-l border-line-2 bg-surface-1 shadow-mac"
+                  style={{ width: DETAIL_OVERLAY_WIDTH }}
+                >
                   <Button
                     size="mini"
                     type="text"
@@ -441,7 +488,10 @@ export function Workspace({
                   />
                 </div>
               ) : (
-                <div className="flex w-[260px] shrink-0 flex-col border-l border-line-2 bg-surface-1">
+                <div
+                  className="flex shrink-0 flex-col border-l border-line-2 bg-surface-1"
+                  style={{ width: ui.detailWidth }}
+                >
                   <DetailPanel
                     conversation={active}
                     harness={harness}
@@ -456,17 +506,29 @@ export function Workspace({
                 </div>
               ))}
             {ui.previewOpen && (
-              <PreviewPanel
-                url={ui.previewUrls[active.id] ?? ''}
-                supportsWebview={webPreview}
-                onUrlChange={(url) =>
-                  setUi((s) => ({
-                    ...s,
-                    previewUrls: { ...s.previewUrls, [active.id]: url },
-                  }))
-                }
-                onClose={() => setUi((s) => ({ ...s, previewOpen: false }))}
+              <ResizeHandle
+                label="调整预览面板宽度"
+                value={ui.previewWidth}
+                min={PREVIEW_RANGE.min}
+                max={previewMax}
+                onChange={(width) => setUi((s) => ({ ...s, previewWidth: width }))}
+                onReset={() => setUi((s) => ({ ...s, previewWidth: PREVIEW_DEFAULT }))}
               />
+            )}
+            {ui.previewOpen && (
+              <div className="min-h-0 shrink-0" style={{ width: ui.previewWidth }}>
+                <PreviewPanel
+                  url={ui.previewUrls[active.id] ?? ''}
+                  supportsWebview={webPreview}
+                  onUrlChange={(url) =>
+                    setUi((s) => ({
+                      ...s,
+                      previewUrls: { ...s.previewUrls, [active.id]: url },
+                    }))
+                  }
+                  onClose={() => setUi((s) => ({ ...s, previewOpen: false }))}
+                />
+              </div>
             )}
           </div>
         ) : (

@@ -1,6 +1,6 @@
 import { Button, Input, Tooltip } from '@arco-design/web-react';
 import { IconClose, IconLaunch, IconPublic, IconRefresh } from '@arco-design/web-react/icon';
-import { normalizeLocalUrl } from '@nexus/protocol';
+import { normalizeHttpUrl, normalizeLocalUrl } from '@nexus/protocol';
 import { useEffect, useRef } from 'react';
 
 /**
@@ -60,9 +60,12 @@ export function PreviewPanel({
   const webviewRef = useRef<WebviewElement | null>(null);
   const normalized = normalizeLocalUrl(url);
   const invalid = url.trim().length > 0 && !normalized;
+  // Any other valid http(s) address can't be embedded (ADR 0014), but the
+  // system browser is always a valid destination for it.
+  const external = normalized ? null : normalizeHttpUrl(url);
 
   return (
-    <aside className="flex w-2/5 min-w-[340px] max-w-[480px] shrink-0 flex-col border-0 border-l border-line-1 bg-surface-2">
+    <aside className="flex h-full min-h-0 w-full flex-col border-0 border-l border-line-1 bg-surface-2">
       <header className="flex h-11 shrink-0 items-center gap-1.5 border-0 border-b border-line-1 px-3">
         <IconPublic className="shrink-0 text-fg-3" />
         <Input
@@ -89,9 +92,10 @@ export function PreviewPanel({
             type="text"
             icon={<IconLaunch />}
             aria-label="在浏览器中打开"
-            disabled={!normalized}
+            disabled={!normalized && !external}
             onClick={() => {
-              if (normalized) window.open(normalized, '_blank');
+              const target = normalized ?? external;
+              if (target) window.open(target, '_blank');
             }}
           />
         </Tooltip>
@@ -109,11 +113,25 @@ export function PreviewPanel({
         <WebviewSurface src={normalized} elementRef={webviewRef} />
       ) : (
         <div className="flex min-h-0 flex-1 items-center justify-center bg-surface-1 px-6 text-center text-xs leading-5 text-fg-3">
-          {!supportsWebview && normalized
-            ? '当前环境不支持内嵌预览，请使用「在浏览器中打开」'
-            : invalid
-              ? '仅支持本机地址（localhost / 127.0.0.1）'
-              : '输入 dev server 地址，如 localhost:5173；agent 消息里的本机链接也可以直接点'}
+          {!supportsWebview && normalized ? (
+            '当前环境不支持内嵌预览，请使用「在浏览器中打开」'
+          ) : invalid && external ? (
+            <span className="flex flex-col items-center gap-2">
+              内置预览仅支持本机地址（localhost / 127.0.0.1）
+              <Button
+                size="mini"
+                type="primary"
+                icon={<IconLaunch />}
+                onClick={() => window.open(external, '_blank')}
+              >
+                在默认浏览器打开
+              </Button>
+            </span>
+          ) : invalid ? (
+            '输入有效的 http(s) 地址；本机地址在内置预览打开，外部地址可用系统浏览器'
+          ) : (
+            '输入 dev server 地址，如 localhost:5173；agent 消息里的本机链接也可以直接点'
+          )}
         </div>
       )}
     </aside>

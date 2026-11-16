@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { normalizeLocalUrl } from './localUrl';
+import { normalizeHttpUrl, normalizeLocalUrl } from './localUrl';
 
 describe('normalizeLocalUrl', () => {
   it('accepts bare localhost with a port and adds http', () => {
@@ -30,5 +30,22 @@ describe('normalizeLocalUrl', () => {
   it('rejects hosts that merely look local', () => {
     expect(normalizeLocalUrl('http://localhost.evil.com')).toBeNull();
     expect(normalizeLocalUrl('http://127.0.0.1.evil.com')).toBeNull();
+  });
+});
+
+describe('normalizeHttpUrl', () => {
+  it('accepts any http(s) address and prefixes bare hosts with https', () => {
+    expect(normalizeHttpUrl('https://www.bilibili.com/video/BV1')).toBe(
+      'https://www.bilibili.com/video/BV1',
+    );
+    expect(normalizeHttpUrl('www.bilibili.com')).toBe('https://www.bilibili.com/');
+    expect(normalizeHttpUrl('http://example.com:8080/a?b=1')).toBe('http://example.com:8080/a?b=1');
+  });
+
+  it('rejects non-http schemes and garbage', () => {
+    expect(normalizeHttpUrl('file:///etc/passwd')).toBeNull();
+    expect(normalizeHttpUrl('javascript:alert(1)')).toBeNull();
+    expect(normalizeHttpUrl('')).toBeNull();
+    expect(normalizeHttpUrl('http://')).toBeNull();
   });
 });

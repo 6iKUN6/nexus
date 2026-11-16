@@ -267,8 +267,14 @@ await until(
 );
 check('预览面板加载本机 dev server 地址（补 http 前缀）', true);
 await type('input[aria-label="预览地址"]', 'https://example.com');
-await until(`document.body.innerText.includes('仅支持本机地址')`, 'remote URL rejected');
-check('预览面板拒绝非本机地址', await ev(`!document.querySelector('webview')`));
+await until(`document.body.innerText.includes('内置预览仅支持本机地址')`, 'remote URL rejected');
+check('预览面板不加载非本机地址', await ev(`!document.querySelector('webview')`));
+check(
+  '非本机地址提供「在默认浏览器打开」入口',
+  await ev(
+    `[...document.querySelectorAll('button')].some(b => b.innerText.includes('在默认浏览器打开'))`,
+  ),
+);
 await shot(`${process.env.NEXUS_E2E_DIR}/preview-pane.png`);
 // Restore a valid URL so the persisted state exercises the reload path in step 2.
 await type('input[aria-label="预览地址"]', 'localhost:5173');

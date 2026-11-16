@@ -1,4 +1,11 @@
 import { useCallback, useEffect, useState } from 'react';
+import {
+  clampWidth,
+  DETAIL_DEFAULT,
+  DETAIL_RANGE,
+  PREVIEW_DEFAULT,
+  PREVIEW_RANGE,
+} from './panelLayout';
 
 /**
  * Per-window view state that should survive a restart (plan M1 exit criteria):
@@ -12,9 +19,12 @@ export type UiState = {
   /** Highest event seq the user has seen per conversation (for unread). */
   seen: Record<string, number>;
   detailOpen: boolean;
+  /** Inline detail column width (px); the slide-over fallback is fixed. */
+  detailWidth: number;
   /** Preview pane (ADR 0014): open state plus the dev-server URL per conversation. */
   previewOpen: boolean;
   previewUrls: Record<string, string>;
+  previewWidth: number;
 };
 
 const KEY = 'nexus.ui.v1';
@@ -24,8 +34,10 @@ const EMPTY: UiState = {
   drafts: {},
   seen: {},
   detailOpen: true,
+  detailWidth: DETAIL_DEFAULT,
   previewOpen: false,
   previewUrls: {},
+  previewWidth: PREVIEW_DEFAULT,
 };
 
 function load(): UiState {
@@ -41,9 +53,17 @@ function load(): UiState {
       drafts: parsed.drafts && typeof parsed.drafts === 'object' ? parsed.drafts : {},
       seen: parsed.seen && typeof parsed.seen === 'object' ? parsed.seen : {},
       detailOpen: parsed.detailOpen !== false,
+      detailWidth:
+        typeof parsed.detailWidth === 'number'
+          ? clampWidth(parsed.detailWidth, DETAIL_RANGE)
+          : DETAIL_DEFAULT,
       previewOpen: parsed.previewOpen === true,
       previewUrls:
         parsed.previewUrls && typeof parsed.previewUrls === 'object' ? parsed.previewUrls : {},
+      previewWidth:
+        typeof parsed.previewWidth === 'number'
+          ? clampWidth(parsed.previewWidth, PREVIEW_RANGE)
+          : PREVIEW_DEFAULT,
     };
   } catch {
     return EMPTY;

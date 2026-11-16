@@ -23,6 +23,22 @@ function parseUrl(input: string) {
   }
 }
 
+/**
+ * Any http(s) address, for the "open in the system browser" escape hatch: a
+ * URL the preview pane must not load can still be offered for external
+ * opening. Bare hosts get https:// (unlike normalizeLocalUrl, which assumes a
+ * dev server and prefixes http://).
+ */
+export function normalizeHttpUrl(input: string): string | null {
+  const trimmed = input.trim();
+  if (!trimmed) return null;
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
+  const url = parseUrl(withScheme);
+  if (!url) return null;
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+  return url.toString();
+}
+
 export function normalizeLocalUrl(input: string): string | null {
   const trimmed = input.trim();
   if (!trimmed) return null;

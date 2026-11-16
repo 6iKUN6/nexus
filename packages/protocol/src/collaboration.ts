@@ -47,7 +47,8 @@ export const collaborationTools = {
     result: z.object({ recorded: z.literal(true) }),
   },
   open_preview: {
-    description: 'Ask the user to open a localhost page in the preview pane.',
+    description:
+      'Ask the user to open a page: localhost URLs go to the preview pane, any other http(s) URL is offered for the system browser.',
     params: z.object({ url: z.string().min(1).max(500) }),
     result: z.object({ recorded: z.literal(true) }),
   },

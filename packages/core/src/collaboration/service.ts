@@ -3,6 +3,7 @@ import {
   type CollaborationTool,
   type Conversation,
   type HarnessId,
+  normalizeHttpUrl,
   normalizeLocalUrl,
   RpcError,
   type Task,
@@ -48,15 +49,14 @@ export class CollaborationService {
   readonly handlers: Record<CollaborationTool, CollabHandler> = {
     open_preview: async (conversationId, params) => {
       const { url } = params as { url: string };
-      // Same whitelist as the preview pane itself (ADR 0014): localhost only.
-      const normalized = normalizeLocalUrl(url);
+      // Local addresses preview in-app; any other valid http(s) URL is still
+      // recorded, but its card can only offer the system browser — the
+      // webview whitelist (ADR 0014) never widens. Either way the timeline
+      // card asks the user before anything opens.
+      const normalized = normalizeLocalUrl(url) ?? normalizeHttpUrl(url);
       if (!normalized) {
-        throw new RpcError(
-          CollaborationErrorCode.InvalidUrl,
-          '仅支持本机地址（localhost / 127.0.0.1）',
-        );
+        throw new RpcError(CollaborationErrorCode.InvalidUrl, '需要有效的 http(s) 地址');
       }
-      // Recorded only: the timeline card asks the user before opening.
       this.deps.conversations.recordCollaborationEvent(conversationId, {
         type: 'preview.requested',
         url: normalized,
