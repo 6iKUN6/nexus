@@ -72,6 +72,27 @@ body {
   color: var(--color-text-1);
 }
 
+@keyframes nx-panel-in {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.nx-panel-in {
+  animation: nx-panel-in 0.18s ease-out;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-panel-in {
+    animation: none;
+  }
+}
+
 @keyframes nx-pulse {
   0%,
   100% {

@@ -62,7 +62,7 @@ export function PreviewPanel({
   const invalid = url.trim().length > 0 && !normalized;
 
   return (
-    <aside className="flex w-[440px] shrink-0 flex-col border-0 border-l border-line-1 bg-surface-2">
+    <aside className="flex w-2/5 min-w-[340px] max-w-[480px] shrink-0 flex-col border-0 border-l border-line-1 bg-surface-2">
       <header className="flex h-11 shrink-0 items-center gap-1.5 border-0 border-b border-line-1 px-3">
         <IconPublic className="shrink-0 text-fg-3" />
         <Input

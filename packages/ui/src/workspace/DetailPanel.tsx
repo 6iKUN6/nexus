@@ -151,10 +151,7 @@ export function DetailPanel({
   };
 
   return (
-    <aside
-      className="flex w-[300px] shrink-0 flex-col overflow-y-auto border-l border-line-2 bg-surface-1"
-      aria-label="会话详情"
-    >
+    <aside className="flex min-h-0 w-full flex-1 flex-col overflow-y-auto" aria-label="会话详情">
       <Section title="执行者">
         <div className="flex items-center gap-2 text-xs text-fg-1">
           <AgentAvatar agent={conversation.harnessId} size="sm" />

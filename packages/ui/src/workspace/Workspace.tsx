@@ -1,4 +1,5 @@
 import { Button, Message } from '@arco-design/web-react';
+import { IconClose } from '@arco-design/web-react/icon';
 import type { Conversation, Handoff, MessageRecord, PermissionOption, Task } from '@nexus/protocol';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { NexusAppIcon } from '../brand/NexusMark';
@@ -103,6 +104,20 @@ export function Workspace({
       return openIds.length === s.openIds.length ? s : { ...s, openIds };
     });
   }, [ready, byId, setUi]);
+
+  // Esc dismisses transient panels: the detail slide-over first, then preview.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'Escape') return;
+      setUi((s) => {
+        if (s.detailOpen) return { ...s, detailOpen: false };
+        if (s.previewOpen) return { ...s, previewOpen: false };
+        return s;
+      });
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [setUi]);
 
   // Load the active conversation's history, and keep marking it as read.
   useEffect(() => {
@@ -305,7 +320,7 @@ export function Workspace({
           onNew={() => setCreating(true)}
         />
         {active ? (
-          <div className="flex min-h-0 flex-1">
+          <div className="relative flex min-h-0 flex-1">
             <main className="flex min-w-0 flex-1 flex-col">
               <ConversationHeader
                 conversation={active}
@@ -386,17 +401,30 @@ export function Workspace({
               />
             </main>
             {ui.detailOpen && (
-              <DetailPanel
-                conversation={active}
-                harness={harness}
-                runs={timeline?.runs ?? []}
-                harnesses={snapshot.harnesses}
-                onConfigure={(patch) => {
-                  void store
-                    .configureConversation({ conversationId: active.id, ...patch })
-                    .catch(reportError);
-                }}
-              />
+              // Slide-over instead of a third column: detail is transient
+              // inspection, so it floats above the conversation instead of
+              // squeezing the chat column (which keeps its reading width).
+              <div className="nx-panel-in absolute inset-y-0 right-0 z-20 flex w-[320px] flex-col border-l border-line-2 bg-surface-1 shadow-mac">
+                <Button
+                  size="mini"
+                  type="text"
+                  icon={<IconClose />}
+                  aria-label="关闭详情"
+                  className="absolute top-2 right-2 z-10"
+                  onClick={() => setUi((s) => ({ ...s, detailOpen: false }))}
+                />
+                <DetailPanel
+                  conversation={active}
+                  harness={harness}
+                  runs={timeline?.runs ?? []}
+                  harnesses={snapshot.harnesses}
+                  onConfigure={(patch) => {
+                    void store
+                      .configureConversation({ conversationId: active.id, ...patch })
+                      .catch(reportError);
+                  }}
+                />
+              </div>
             )}
             {ui.previewOpen && (
               <PreviewPanel
