@@ -31,8 +31,10 @@ export type CreateSessionOptions = {
    * Collaboration channel for this session (D14, ADR 0016). Core issues a
    * per-session token bound to the conversation; adapters that can load MCP
    * hand the helper to the harness, others just pass the env vars through.
+   * `bridgePath` is the generated pi extension (D23, ADR 0020); only the pi
+   * adapter uses it (`pi -e`), everyone else ignores it.
    */
-  collaboration?: { socketPath: string; token: string; helperPath: string };
+  collaboration?: { socketPath: string; token: string; helperPath: string; bridgePath?: string };
   /**
    * User-managed MCP servers this conversation opted into (D23, ADR 0020).
    * Additive like the collaboration channel; adapters without MCP support

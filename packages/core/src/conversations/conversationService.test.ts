@@ -156,6 +156,7 @@ describe('ConversationService', () => {
       collaboration: {
         socketPath: '/tmp/nexus.sock',
         helperPath: '/tmp/nexus-helper',
+        bridgePath: '/tmp/nexus-bridge.ts',
         issueToken: (conversationId) => `token-${conversationId}`,
         revokeToken: (token) => revoked.push(token),
       },
@@ -173,6 +174,7 @@ describe('ConversationService', () => {
       socketPath: '/tmp/nexus.sock',
       token: `token-${c.id}`,
       helperPath: '/tmp/nexus-helper',
+      bridgePath: '/tmp/nexus-bridge.ts',
     });
 
     await service.stopSession(c.id);

@@ -12,6 +12,7 @@ import type {
   RpcPort,
 } from '@nexus/protocol';
 import { sendNotification, serveRpc } from '@nexus/protocol';
+import { writePiBridge } from './collaboration/piBridge';
 import { startCollaborationServer } from './collaboration/server';
 import { CollaborationService } from './collaboration/service';
 import { writeHelperShim } from './collaboration/shim';
@@ -173,8 +174,12 @@ export function createCore(options: CoreOptions): Core {
       ? join(tmpdir(), `nexus-helper-${randomUUID()}`)
       : join(dirname(options.databasePath), 'bin');
   const helperPath = join(helperDir, 'nexus-helper');
+  let bridgePath: string | null = null;
   if (options.collaboration) {
     writeHelperShim(helperPath, options.collaboration.runner, options.collaboration.helperScript);
+    // pi has no MCP support; it gets the collaboration tools as a native
+    // extension instead of the one-shot helper (D23, ADR 0020).
+    bridgePath = writePiBridge(helperDir);
   }
   let tasks: TaskService | null = null;
   let handoffs: HandoffService | null = null;
@@ -207,6 +212,7 @@ export function createCore(options: CoreOptions): Core {
           collaboration: {
             socketPath,
             helperPath,
+            ...(bridgePath ? { bridgePath } : {}),
             issueToken: (conversationId: string) => sessionTokens.issue(conversationId),
             revokeToken: (token: string) => sessionTokens.revoke(token),
           },

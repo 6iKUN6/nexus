@@ -235,4 +235,35 @@ describe('pi adapter session', () => {
     expect(resumed.externalId).toBe('session-abc');
     expect(spawnArgs[1]).toEqual(['--mode', 'rpc', '--session-id', 'session-abc']);
   });
+
+  it('loads the core bridge extension via -e only when collaboration is on (D23)', async () => {
+    const { child } = fakePiProcess('rpc-basic.jsonl');
+    const spawnArgs: string[][] = [];
+    const spawnImpl = ((_exe: string, args: string[]) => {
+      spawnArgs.push(args);
+      return child;
+    }) as unknown as typeof import('node:child_process').spawn;
+    const adapter = createPiAdapter({ spawnImpl });
+
+    const withCollab = await adapter.createSession({
+      ...sessionOptions,
+      collaboration: {
+        socketPath: '/tmp/nexus.sock',
+        token: 't',
+        helperPath: '/tmp/nexus-helper',
+        bridgePath: '/tmp/nexus-bridge.ts',
+      },
+    });
+    expect(spawnArgs[0]).toEqual([
+      '--mode',
+      'rpc',
+      '--session-id',
+      withCollab.externalId,
+      '--extension',
+      '/tmp/nexus-bridge.ts',
+    ]);
+
+    await adapter.createSession(sessionOptions);
+    expect(spawnArgs[1]).not.toContain('--extension');
+  });
 });

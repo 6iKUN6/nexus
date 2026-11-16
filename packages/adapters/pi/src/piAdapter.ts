@@ -100,11 +100,16 @@ type PiProcess = {
 
 function startPiProcess(
   spawnImpl: typeof spawn,
-  { cwd, executablePath, env }: CreateSessionOptions,
+  { cwd, executablePath, env, collaboration }: CreateSessionOptions,
   sessionId: string,
 ): PiProcess {
   if (!executablePath) throw new Error('未找到 pi 可执行文件，请先安装 pi。');
-  const child = spawnImpl(executablePath, ['--mode', 'rpc', '--session-id', sessionId], {
+  // pi has no MCP support; the collaboration tools arrive as a core-generated
+  // extension instead (D23, ADR 0020). -e is additive to the user's own
+  // discovered extensions.
+  const argv = ['--mode', 'rpc', '--session-id', sessionId];
+  if (collaboration?.bridgePath) argv.push('--extension', collaboration.bridgePath);
+  const child = spawnImpl(executablePath, argv, {
     cwd,
     env,
     detached: true,

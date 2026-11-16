@@ -53,6 +53,8 @@ export type ConversationServiceDeps = {
   collaboration?: {
     socketPath: string;
     helperPath: string;
+    /** Generated pi bridge extension (D23); forwarded to the adapter. */
+    bridgePath?: string | undefined;
     issueToken: (conversationId: string) => string;
     revokeToken: (token: string) => void;
   };
@@ -624,7 +626,12 @@ export class ConversationService {
               NEXUS_TOKEN: token,
               NEXUS_HELPER_PATH: collab.helperPath,
             },
-            collaboration: { socketPath: collab.socketPath, token, helperPath: collab.helperPath },
+            collaboration: {
+              socketPath: collab.socketPath,
+              token,
+              helperPath: collab.helperPath,
+              ...(collab.bridgePath ? { bridgePath: collab.bridgePath } : {}),
+            },
           }
         : {}),
     };
