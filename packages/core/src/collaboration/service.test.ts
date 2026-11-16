@@ -39,6 +39,7 @@ function setup() {
   const tasks = new TaskService({
     store,
     conversations,
+    gitRun: async () => ({ code: 0, stdout: '', stderr: '' }),
     now: Date.now,
     newId: () => `task-${Math.random().toString(36).slice(2)}`,
   });
@@ -74,6 +75,7 @@ describe('CollaborationService', () => {
       goal: '整理笔记',
       acceptance: null,
       status: null,
+      children: [],
     });
 
     const { task, childConversation } = await tasks.delegate({
@@ -88,6 +90,12 @@ describe('CollaborationService', () => {
       goal: '给笔记补上目录',
       acceptance: '目录可跳转',
       status: 'running',
+      children: [],
+    });
+    // D16: the parent pulls sub-task progress instead of being pushed runs.
+    expect(await collab.handlers.read_task_context(parent.id, {})).toMatchObject({
+      role: 'parent',
+      children: [{ taskId: task.id, goal: '给笔记补上目录', status: 'running', summary: null }],
     });
     expect(await collab.handlers.read_task_context(parent.id, {})).toMatchObject({
       role: 'parent',

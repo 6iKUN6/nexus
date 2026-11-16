@@ -31,6 +31,7 @@ const okHandlers: RpcHandlers = {
   'conversation.configure': unused,
   'message.list': unused,
   'message.resend': unused,
+  'task.evidence': unused,
   'handoff.suggest': unused,
   'diagnostics.export': unused,
   'system.ping': () => ({ coreVersion: '0.0.0-test', uptimeMs: 5 }),

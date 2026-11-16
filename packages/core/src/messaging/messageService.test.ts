@@ -43,6 +43,7 @@ function setup(adapter: AgentAdapter = createFakeAdapter(), maxConcurrentRuns?: 
   const tasks = new TaskService({
     store,
     conversations,
+    gitRun: async () => ({ code: 0, stdout: '', stderr: '' }),
     now: Date.now,
     newId: () => `task-${Math.random().toString(36).slice(2)}`,
   });

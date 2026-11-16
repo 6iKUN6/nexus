@@ -163,6 +163,11 @@ await ev(
 await until(`document.body.innerText.includes('子任务结果')`, 'card review');
 check('委派卡片进入待验收并展示子任务结果', true);
 await ev(
+  `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === '查看改动').click()`,
+);
+await until(`document.body.innerText.includes('工作区没有改动')`, 'task evidence', 15000);
+check('委派卡片可展开证据（子任务改动列表）', true);
+await ev(
   `[...document.querySelectorAll('button')].find(b => b.innerText.trim() === '验收通过').click()`,
 );
 await until(`document.body.innerText.includes('已通过')`, 'accepted');

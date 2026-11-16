@@ -335,6 +335,9 @@ export function Workspace({
                 onOpenConversation={open}
                 onTaskRespond={respondToTask}
                 messageStates={messageStates}
+                onLoadEvidence={(taskId) =>
+                  store.taskEvidence(taskId).then(({ evidence }) => evidence)
+                }
                 onResendMessage={(messageId) => {
                   if (!active) return;
                   void store

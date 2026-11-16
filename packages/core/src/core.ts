@@ -205,6 +205,7 @@ export function createCore(options: CoreOptions): Core {
   const taskService = new TaskService({
     store,
     conversations,
+    gitRun: options.gitRun ?? realGitRun,
     now,
     newId: options.newId ?? randomUUID,
   });
@@ -277,6 +278,7 @@ export function createCore(options: CoreOptions): Core {
     'task.list': ({ conversationId }) => taskService.list(conversationId),
     'task.inbox': () => ({ items: taskService.inbox() }),
     'task.respond': (params) => taskService.respond(params),
+    'task.evidence': async ({ taskId }) => ({ evidence: await taskService.evidence(taskId) }),
     'message.list': ({ conversationId }) => ({ messages: messages.list(conversationId) }),
     'message.resend': ({ messageId }) => ({ message: messages.resend(messageId) }),
     'handoff.suggest': (params) => handoffService.suggest(params.conversationId),

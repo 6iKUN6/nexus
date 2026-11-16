@@ -51,7 +51,8 @@ export async function findRepoRoot(run: GitRun, cwd: string): Promise<string | n
 /** Longest diff kept in a handoff package; larger ones are truncated and flagged. */
 const MAX_DIFF_CHARS = 12_000;
 
-const SECRET_FILE = /(^|\/)(\.env($|\.)|.*\.(pem|key|p12|pfx)$)/;
+/** Files that look like secrets; never named or diffed in packages/evidence. */
+export const SECRET_FILE = /(^|\/)(\.env($|\.)|.*\.(pem|key|p12|pfx)$)/;
 
 /**
  * Working-state snapshot for a handoff (ADR 0011). The receiver works in the

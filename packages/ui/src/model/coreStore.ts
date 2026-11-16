@@ -212,6 +212,11 @@ export class CoreStore {
     return this.rpc().request('message.resend', { messageId });
   }
 
+  /** What the child changed in its worktree, computed live (D16). */
+  taskEvidence(taskId: string) {
+    return this.rpc().request('task.evidence', { taskId });
+  }
+
   /** Writes a sanitized diagnostic bundle locally; the result path is local only. */
   exportDiagnostics(conversationId?: string) {
     return this.rpc().request('diagnostics.export', { conversationId });

@@ -1,6 +1,6 @@
 import { Button, Spin } from '@arco-design/web-react';
 import { IconArrowDown } from '@arco-design/web-react/icon';
-import type { HarnessId, MessageRecord, PermissionOption } from '@nexus/protocol';
+import type { HarnessId, MessageRecord, PermissionOption, TaskEvidence } from '@nexus/protocol';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PERSONAS, type TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
@@ -25,6 +25,8 @@ type TimelineProps = {
   /** Delivery states keyed by message id (D15); empty until loaded. */
   messageStates: Record<string, MessageRecord>;
   onResendMessage: (messageId: string) => void;
+  /** Loads a delegated task's worktree evidence (D16). */
+  onLoadEvidence: (taskId: string) => Promise<TaskEvidence>;
   /** Local dev-server URLs in messages become chips that open the preview pane. */
   onOpenLocalUrl?: (url: string) => void;
 };
@@ -48,6 +50,7 @@ export function Timeline({
   onRequestHandoff,
   messageStates,
   onResendMessage,
+  onLoadEvidence,
   onOpenLocalUrl,
 }: TimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -112,6 +115,7 @@ export function Timeline({
                 onRequestHandoff={onRequestHandoff}
                 messageStates={messageStates}
                 onResendMessage={onResendMessage}
+                onLoadEvidence={onLoadEvidence}
               />
             ))
           )}
@@ -161,6 +165,7 @@ function TimelineRow({
   onRequestHandoff,
   messageStates,
   onResendMessage,
+  onLoadEvidence,
   onOpenLocalUrl,
 }: {
   item: TimelineItem;
@@ -173,6 +178,7 @@ function TimelineRow({
   onRequestHandoff: TimelineProps['onRequestHandoff'];
   messageStates: TimelineProps['messageStates'];
   onResendMessage: TimelineProps['onResendMessage'];
+  onLoadEvidence: TimelineProps['onLoadEvidence'];
   onOpenLocalUrl: TimelineProps['onOpenLocalUrl'];
 }) {
   switch (item.kind) {
@@ -237,6 +243,7 @@ function TimelineRow({
               item={item}
               onOpenConversation={onOpenConversation}
               onRespond={onTaskRespond}
+              onLoadEvidence={onLoadEvidence}
             />
           )}
           {item.kind === 'handoff' && <HandoffCard item={item} />}

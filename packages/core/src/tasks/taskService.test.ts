@@ -1,4 +1,5 @@
 import { mkdtempSync, rmSync } from 'node:fs';
+import { mkdir } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createFakeAdapter, type FakeStep } from '@nexus/adapter-fake';
@@ -34,6 +35,8 @@ function connect(options: {
   script: (prompt: string) => FakeStep[];
   databasePath?: string;
   stepDelayMs?: number;
+  gitRun?: GitRun;
+  worktrees?: WorktreeManager;
 }) {
   const core = createCore({
     version: '0.0.0-test',
@@ -43,8 +46,8 @@ function connect(options: {
     },
     detectHarnesses: async () => [],
     resolvePath: async () => '/bin',
-    worktrees: fakeWorktrees,
-    gitRun: fakeGitRun,
+    worktrees: options.worktrees ?? fakeWorktrees,
+    gitRun: options.gitRun ?? fakeGitRun,
   });
   const [clientPort, corePort] = createMemoryPortPair();
   core.attach(corePort);
@@ -260,5 +263,58 @@ describe('task delegation (M3)', () => {
     } finally {
       rmSync(dir, { recursive: true, force: true });
     }
+  });
+});
+
+describe('task evidence (D16)', () => {
+  it('computes the child worktree changes over RPC', async () => {
+    const evidenceGit: GitRun = async (args) => {
+      if (args[0] === 'rev-parse') return { code: 0, stdout: 'abc123\n', stderr: '' };
+      if (args[0] === 'status') {
+        return { code: 0, stdout: ' M src/a.ts\0?? notes.md\0', stderr: '' };
+      }
+      if (args.join(' ').startsWith('diff HEAD --numstat')) {
+        return { code: 0, stdout: '2\t0\tsrc/a.ts\0', stderr: '' };
+      }
+      if (args[0] === 'diff')
+        return { code: 0, stdout: 'diff --git a/src/a.ts b/src/a.ts\n+x\n', stderr: '' };
+      return { code: 0, stdout: '', stderr: '' };
+    };
+    const makingWorktrees: WorktreeManager = {
+      create: async (cwd, id) => {
+        const dir = join(cwd, '.real-worktrees', id);
+        await mkdir(dir, { recursive: true });
+        return { cwd: dir, repoRoot: cwd };
+      },
+    };
+    const { client } = connect({
+      script: replyScript,
+      gitRun: evidenceGit,
+      worktrees: makingWorktrees,
+    });
+    const parent = await createParent(client);
+    const { task } = await client.request('task.delegate', {
+      conversationId: parent.id,
+      goal: '改一下 a.ts',
+      acceptance: null,
+      harnessId: 'fake',
+    });
+
+    const { evidence } = await client.request('task.evidence', { taskId: task.id });
+    expect(evidence).toMatchObject({
+      available: true,
+      baseCommit: 'abc123',
+      files: [{ path: 'src/a.ts', status: 'modified', added: 2, deleted: 0 }],
+      untracked: ['notes.md'],
+      diffTruncated: false,
+    });
+    expect(evidence.diff).toContain('diff --git');
+  });
+
+  it('reports unknown tasks', async () => {
+    const { client } = connect({ script: replyScript });
+    await expect(client.request('task.evidence', { taskId: 'nope' })).rejects.toMatchObject({
+      message: expect.stringContaining('不存在'),
+    });
   });
 });

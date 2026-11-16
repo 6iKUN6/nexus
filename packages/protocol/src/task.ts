@@ -31,3 +31,29 @@ export const taskSchema = z.object({
   updatedAt: z.number().int(),
 });
 export type Task = z.infer<typeof taskSchema>;
+
+/**
+ * What a delegated task actually changed (D16, ADR 0018). Computed on demand
+ * from the child's worktree, never persisted: stored evidence would go stale.
+ * Secret-looking files are only counted, never named or included in the diff.
+ */
+export const taskEvidenceSchema = z.object({
+  available: z.boolean(),
+  /** Why evidence is unavailable (worktree gone, not a repo, …). */
+  problem: z.string().nullable(),
+  baseCommit: z.string().nullable(),
+  files: z.array(
+    z.object({
+      path: z.string(),
+      status: z.enum(['added', 'modified', 'deleted']),
+      added: z.number().nullable(),
+      deleted: z.number().nullable(),
+    }),
+  ),
+  untracked: z.array(z.string()),
+  /** Number of untracked files that look like secrets and were omitted. */
+  secretFilesOmitted: z.number(),
+  diff: z.string().nullable(),
+  diffTruncated: z.boolean(),
+});
+export type TaskEvidence = z.infer<typeof taskEvidenceSchema>;

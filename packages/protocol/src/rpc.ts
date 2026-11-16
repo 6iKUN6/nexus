@@ -3,7 +3,7 @@ import { conversationEventSchema, conversationSchema, isolationSchema } from './
 import { handoffSchema } from './handoff';
 import { harnessIdSchema, harnessInfoSchema } from './harness';
 import { messageRecordSchema } from './message';
-import { taskSchema, taskStatusSchema } from './task';
+import { taskEvidenceSchema, taskSchema, taskStatusSchema } from './task';
 
 /**
  * Minimal typed JSON-RPC 2.0 over any message port (Electron MessagePort,
@@ -105,6 +105,11 @@ export const rpcMethods = {
   'task.list': {
     params: z.object({ conversationId: z.string() }),
     result: z.object({ children: z.array(taskSchema), parent: taskSchema.nullable() }),
+  },
+  /** What the child actually changed, computed from its worktree (D16). */
+  'task.evidence': {
+    params: z.object({ taskId: z.string() }),
+    result: z.object({ evidence: taskEvidenceSchema }),
   },
   /** Parent conversations with tasks awaiting review or failed (the M3 inbox). */
   'task.inbox': {

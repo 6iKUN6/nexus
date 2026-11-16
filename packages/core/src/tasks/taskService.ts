@@ -1,7 +1,9 @@
-import type { Conversation, HarnessId, Task } from '@nexus/protocol';
+import type { Conversation, HarnessId, Task, TaskEvidence } from '@nexus/protocol';
 import { RpcError } from '@nexus/protocol';
 import type { ConversationService } from '../conversations/conversationService';
 import type { Store } from '../store/store';
+import type { GitRun } from '../worktree/gitWorktree';
+import { collectTaskEvidence } from './evidence';
 
 /**
  * Delegation (M3, ADR 0008): user-initiated sub-tasks. A delegation creates a
@@ -25,6 +27,8 @@ export const TaskErrorCode = {
 type TaskServiceDeps = {
   store: Store;
   conversations: ConversationService;
+  /** git runner for evidence collection; injected in tests. */
+  gitRun: GitRun;
   now: () => number;
   newId: () => string;
 };
@@ -138,6 +142,14 @@ export class TaskService {
     const status = input.blocked ? 'failed' : 'review';
     this.finish(task, status, summary);
     return { taskId: task.id, status };
+  }
+
+  /** What the child changed in its worktree, computed live (D16, ADR 0018). */
+  async evidence(taskId: string): Promise<TaskEvidence> {
+    const task = this.deps.store.getTask(taskId);
+    if (!task) throw new RpcError(TaskErrorCode.NotFound, `子任务不存在：${taskId}`);
+    const child = this.deps.conversations.get(task.childConversationId);
+    return collectTaskEvidence(this.deps.gitRun, child.cwd);
   }
 
   respond(input: { taskId: string; action: 'accept' | 'request_changes'; feedback: string }): {

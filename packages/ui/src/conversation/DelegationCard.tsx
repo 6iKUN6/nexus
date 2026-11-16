@@ -1,6 +1,6 @@
-import { Button, Input } from '@arco-design/web-react';
-import { IconBranch, IconCheck, IconUndo } from '@arco-design/web-react/icon';
-import type { TaskStatus } from '@nexus/protocol';
+import { Button, Input, Spin } from '@arco-design/web-react';
+import { IconBranch, IconCheck, IconFile, IconUndo } from '@arco-design/web-react/icon';
+import type { TaskEvidence, TaskStatus } from '@nexus/protocol';
 import { useState } from 'react';
 import type { TimelineItem } from '../model/types';
 import { PERSONAS } from '../model/types';
@@ -21,17 +21,27 @@ const STATUS_LABEL: Record<TaskStatus, { text: string; className: string }> = {
  * without extra fetching. Review actions talk back to core; the inline
  * feedback form keeps the "request changes" flow in place.
  */
+const FILE_STATUS_LABEL: Record<TaskEvidence['files'][number]['status'], string> = {
+  added: '新增',
+  modified: '修改',
+  deleted: '删除',
+};
+
 export function DelegationCard({
   item,
   onOpenConversation,
   onRespond,
+  onLoadEvidence,
 }: {
   item: DelegationItem;
   onOpenConversation: (conversationId: string) => void;
   onRespond: (taskId: string, action: 'accept' | 'request_changes', feedback?: string) => void;
+  onLoadEvidence: (taskId: string) => Promise<TaskEvidence>;
 }) {
   const [rejecting, setRejecting] = useState(false);
   const [feedback, setFeedback] = useState('');
+  const [evidenceOpen, setEvidenceOpen] = useState(false);
+  const [evidence, setEvidence] = useState<TaskEvidence | 'loading' | 'error' | null>(null);
   const status = STATUS_LABEL[item.status];
   const persona = PERSONAS[item.harnessId];
 
@@ -79,6 +89,24 @@ export function DelegationCard({
         <Button size="mini" onClick={() => onOpenConversation(item.childConversationId)}>
           打开子会话
         </Button>
+        <Button
+          size="mini"
+          type="text"
+          icon={<IconFile />}
+          aria-expanded={evidenceOpen}
+          onClick={() => {
+            const next = !evidenceOpen;
+            setEvidenceOpen(next);
+            // Reload on every open: the worktree keeps changing while the
+            // task runs, and stale evidence is worse than a fresh fetch.
+            if (next) {
+              setEvidence('loading');
+              onLoadEvidence(item.taskId).then(setEvidence, () => setEvidence('error'));
+            }
+          }}
+        >
+          查看改动
+        </Button>
         {item.status === 'review' && (
           <>
             <Button
@@ -100,6 +128,20 @@ export function DelegationCard({
           </Button>
         )}
       </div>
+
+      {evidenceOpen && (
+        <div className="mt-2 rounded border border-line-1 bg-surface-2 p-2">
+          {evidence === 'loading' && (
+            <div className="flex justify-center py-2">
+              <Spin size={14} />
+            </div>
+          )}
+          {evidence === 'error' && <p className="m-0 text-xs text-fg-3">读取改动失败，请重试。</p>}
+          {evidence !== null && evidence !== 'loading' && evidence !== 'error' && (
+            <EvidenceView evidence={evidence} />
+          )}
+        </div>
+      )}
 
       {rejecting && (
         <div className="mt-2 flex flex-col gap-1.5 rounded border border-line-1 bg-surface-2 p-2">
@@ -131,5 +173,67 @@ export function DelegationCard({
         </div>
       )}
     </section>
+  );
+}
+
+function EvidenceView({ evidence }: { evidence: TaskEvidence }) {
+  const [diffOpen, setDiffOpen] = useState(false);
+  if (!evidence.available) {
+    return <p className="m-0 text-xs text-fg-3">{evidence.problem ?? '无法读取改动'}</p>;
+  }
+  const empty = evidence.files.length === 0 && evidence.untracked.length === 0;
+  return (
+    <div className="flex flex-col gap-1.5">
+      {empty && <p className="m-0 text-xs text-fg-3">工作区没有改动。</p>}
+      {evidence.files.map((file) => (
+        <div key={file.path} className="flex items-center gap-2 text-xs">
+          <span className="rounded bg-tint-2 px-1 py-0.5 text-[11px] text-fg-2">
+            {FILE_STATUS_LABEL[file.status]}
+          </span>
+          <span className="nx-selectable min-w-0 flex-1 truncate font-mono text-[11px] text-fg-1">
+            {file.path}
+          </span>
+          {(file.added !== null || file.deleted !== null) && (
+            <span className="shrink-0 font-mono text-[11px]">
+              <span className="text-ok">+{file.added ?? 0}</span>
+              <span className="text-fg-3"> / </span>
+              <span className="text-bad">−{file.deleted ?? 0}</span>
+            </span>
+          )}
+        </div>
+      ))}
+      {evidence.untracked.map((file) => (
+        <div key={file} className="flex items-center gap-2 text-xs">
+          <span className="rounded bg-tint-2 px-1 py-0.5 text-[11px] text-fg-2">新增</span>
+          <span className="nx-selectable min-w-0 flex-1 truncate font-mono text-[11px] text-fg-1">
+            {file}
+          </span>
+          <span className="shrink-0 text-[11px] text-fg-3">未跟踪</span>
+        </div>
+      ))}
+      {evidence.secretFilesOmitted > 0 && (
+        <p className="m-0 text-[11px] text-fg-3">
+          已省略 {evidence.secretFilesOmitted} 个疑似密钥文件。
+        </p>
+      )}
+      {evidence.diff && (
+        <div>
+          <Button
+            size="mini"
+            type="text"
+            aria-expanded={diffOpen}
+            onClick={() => setDiffOpen(!diffOpen)}
+          >
+            {diffOpen ? '收起 diff' : '展开 diff'}
+            {evidence.diffTruncated ? '（已截断）' : ''}
+          </Button>
+          {diffOpen && (
+            <pre className="nx-selectable m-0 mt-1 max-h-64 overflow-auto rounded bg-tint-1 p-2 font-mono text-[11px] leading-relaxed text-fg-2">
+              {evidence.diff}
+            </pre>
+          )}
+        </div>
+      )}
+    </div>
   );
 }

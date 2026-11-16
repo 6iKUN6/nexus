@@ -120,6 +120,7 @@ export class CollaborationService {
         goal: parent.goal,
         acceptance: parent.acceptance,
         status: parent.status,
+        children: [],
       };
     }
     return {
@@ -128,6 +129,14 @@ export class CollaborationService {
       goal: conversation.goal,
       acceptance: null,
       status: null,
+      // Parent agents pull sub-task results here instead of being pushed a
+      // run every time a child finishes (D16, ADR 0018).
+      children: children.map((child) => ({
+        taskId: child.id,
+        goal: child.goal,
+        status: child.status,
+        summary: child.resultSummary,
+      })),
     };
   }
 

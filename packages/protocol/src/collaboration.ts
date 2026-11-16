@@ -55,6 +55,17 @@ export const collaborationTools = {
       goal: z.string().nullable(),
       acceptance: z.string().nullable(),
       status: z.string().nullable(),
+      /** Sub-tasks this conversation delegated (D16); empty for child/standalone. */
+      children: z
+        .array(
+          z.object({
+            taskId: z.string(),
+            goal: z.string(),
+            status: z.string(),
+            summary: z.string().nullable(),
+          }),
+        )
+        .default([]),
     }),
   },
 } satisfies Record<string, { description: string; params: z.ZodType; result: z.ZodType }>;
