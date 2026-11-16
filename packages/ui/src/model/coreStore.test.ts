@@ -69,6 +69,9 @@ function setup(history: ConversationEvent[]) {
     'mcp.list': unused,
     'mcp.upsert': unused,
     'mcp.remove': unused,
+    'pi.extension.list': unused,
+    'pi.extension.install': unused,
+    'pi.extension.remove': unused,
     'handoff.suggest': unused,
     'diagnostics.export': unused,
   };

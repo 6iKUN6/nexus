@@ -2,8 +2,9 @@ import { z } from 'zod';
 import { conversationEventSchema, conversationSchema, isolationSchema } from './conversation';
 import { handoffSchema } from './handoff';
 import { harnessIdSchema, harnessInfoSchema } from './harness';
-import { mcpServerConfigSchema, mcpServerInputSchema, mcpServerViewSchema } from './mcpServer';
+import { mcpServerConfigSchema, mcpServerInputSchema } from './mcpServer';
 import { messageRecordSchema } from './message';
+import { piExtensionSchema, piExtensionSourceSchema } from './piExtension';
 import { taskEvidenceSchema, taskSchema, taskStatusSchema } from './task';
 
 /**
@@ -136,6 +137,19 @@ export const rpcMethods = {
   },
   'mcp.remove': {
     params: z.object({ id: z.string() }),
+    result: z.object({ removed: z.boolean() }),
+  },
+  /** pi extensions (user scope), managed through the pi CLI (D23, ADR 0020). */
+  'pi.extension.list': {
+    params: z.object({}),
+    result: z.object({ extensions: z.array(piExtensionSchema), piInstalled: z.boolean() }),
+  },
+  'pi.extension.install': {
+    params: z.object({ source: piExtensionSourceSchema }),
+    result: z.object({ installed: z.literal(true) }),
+  },
+  'pi.extension.remove': {
+    params: z.object({ source: piExtensionSourceSchema }),
     result: z.object({ removed: z.boolean() }),
   },
   'message.list': {

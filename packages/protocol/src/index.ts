@@ -8,5 +8,6 @@ export * from './localUrl';
 export * from './mcpServer';
 export * from './memoryPort';
 export * from './message';
+export * from './piExtension';
 export * from './rpc';
 export * from './task';

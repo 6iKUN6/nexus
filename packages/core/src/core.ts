@@ -26,6 +26,7 @@ import { HandoffService } from './handoff/handoffService';
 import { detectHarnesses, nodeDetectDeps } from './harness/detect';
 import { McpService } from './mcp/mcpService';
 import { MessageService } from './messaging/messageService';
+import { PiExtensionService } from './piExtensions/piExtensionService';
 import { Store } from './store/store';
 import { TaskService } from './tasks/taskService';
 import {
@@ -179,6 +180,12 @@ export function createCore(options: CoreOptions): Core {
   let handoffs: HandoffService | null = null;
   let messageService: MessageService | null = null;
   const mcpServers = new McpService({ store, loginEnv: loadEnv, now });
+  // pi's executable path comes from the same detection the adapters use; the
+  // service caches nothing so install/remove always sees the current list.
+  const piExtensions = new PiExtensionService({
+    piPath: async () =>
+      (await loadHarnesses(false)).find((h) => h.id === 'pi')?.executablePath ?? null,
+  });
   const conversations = new ConversationService({
     store,
     adapters: options.adapters,
@@ -296,6 +303,14 @@ export function createCore(options: CoreOptions): Core {
     'mcp.list': async () => ({ servers: await mcpServers.list() }),
     'mcp.upsert': async ({ server }) => ({ server: await mcpServers.upsert(server) }),
     'mcp.remove': ({ id }) => ({ removed: mcpServers.remove(id) }),
+    'pi.extension.list': () => piExtensions.list(),
+    'pi.extension.install': async ({ source }) => {
+      await piExtensions.install(source);
+      return { installed: true };
+    },
+    'pi.extension.remove': async ({ source }) => ({
+      removed: await piExtensions.remove(source),
+    }),
     'message.resend': ({ messageId }) => ({ message: messages.resend(messageId) }),
     'handoff.suggest': (params) => handoffService.suggest(params.conversationId),
     'handoff.prepare': async (params) => ({ handoff: await handoffService.prepare(params) }),

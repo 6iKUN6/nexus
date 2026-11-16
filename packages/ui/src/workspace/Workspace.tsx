@@ -361,6 +361,10 @@ export function Workspace({
         mcpServers={snapshot.mcpServers}
         onMcpUpsert={(input) => void store.upsertMcpServer(input).catch(reportError)}
         onMcpRemove={(id) => void store.removeMcpServer(id).catch(reportError)}
+        piExtensions={snapshot.piExtensions}
+        onPiRefresh={() => store.refreshPiExtensions()}
+        onPiInstall={(source) => store.installPiExtension(source)}
+        onPiRemove={(source) => store.removePiExtension(source)}
       />
       <div className="flex min-w-0 flex-1 flex-col bg-surface-1">
         <TabStrip

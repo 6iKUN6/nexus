@@ -6,6 +6,7 @@ import type {
   HarnessInfo,
   McpServerInput,
   McpServerView,
+  PiExtension,
   RpcClient,
   TaskStatus,
 } from '@nexus/protocol';
@@ -32,6 +33,8 @@ export type CoreSnapshot = {
   taskInbox: ReadonlyArray<{ conversationId: string; status: TaskStatus }>;
   /** User-managed MCP servers (D23); empty until the first list resolves. */
   mcpServers: McpServerView[];
+  /** pi user-scope extensions (D23); null until the first list resolves. */
+  piExtensions: { extensions: PiExtension[]; piInstalled: boolean } | null;
 };
 
 type Listener = () => void;
@@ -48,6 +51,7 @@ export class CoreStore {
     events: new Map(),
     taskInbox: [],
     mcpServers: [],
+    piExtensions: null,
   };
   private readonly listeners = new Set<Listener>();
   private client: RpcClient | null = null;
@@ -112,6 +116,22 @@ export class CoreStore {
   async removeMcpServer(id: string): Promise<void> {
     await this.rpc().request('mcp.remove', { id });
     await this.refreshMcpServers();
+  }
+
+  /** pi user-scope extensions (D23). Loaded lazily by the Agents view. */
+  async refreshPiExtensions(): Promise<void> {
+    const result = await this.rpc().request('pi.extension.list', {});
+    this.set({ piExtensions: result });
+  }
+
+  async installPiExtension(source: string): Promise<void> {
+    await this.rpc().request('pi.extension.install', { source });
+    await this.refreshPiExtensions();
+  }
+
+  async removePiExtension(source: string): Promise<void> {
+    await this.rpc().request('pi.extension.remove', { source });
+    await this.refreshPiExtensions();
   }
 
   /** Loads (or tops up) the event log of a conversation. Idempotent while in flight. */

@@ -6,6 +6,7 @@ import type {
   HarnessInfo,
   McpServerInput,
   McpServerView,
+  PiExtension,
   TaskStatus,
 } from '@nexus/protocol';
 import { type Ref, useState } from 'react';
@@ -14,6 +15,7 @@ import { PERSONAS } from '../model/types';
 import type { ThemePreference } from '../theme/themePreference';
 import { AgentAvatar } from './AgentAvatar';
 import { McpServersSection } from './McpServersSection';
+import { PiExtensionsSection } from './PiExtensionsSection';
 import { StatusIcon } from './StatusLabel';
 import { ThemeSwitcher } from './ThemeSwitcher';
 
@@ -32,6 +34,11 @@ type SidebarProps = {
   mcpServers: McpServerView[];
   onMcpUpsert: (input: McpServerInput) => void;
   onMcpRemove: (id: string) => void;
+  /** pi user-scope extensions (D23); null until loaded. */
+  piExtensions: { extensions: PiExtension[]; piInstalled: boolean } | null;
+  onPiRefresh: () => Promise<void>;
+  onPiInstall: (source: string) => Promise<void>;
+  onPiRemove: (source: string) => Promise<void>;
   searchRef: Ref<HTMLInputElement>;
   exporting: boolean;
   onExportDiagnostics: () => void;
@@ -173,6 +180,10 @@ export function Sidebar(props: SidebarProps) {
             mcpServers={props.mcpServers}
             onMcpUpsert={props.onMcpUpsert}
             onMcpRemove={props.onMcpRemove}
+            piExtensions={props.piExtensions}
+            onPiRefresh={props.onPiRefresh}
+            onPiInstall={props.onPiInstall}
+            onPiRemove={props.onPiRemove}
           />
         )}
       </nav>
@@ -328,6 +339,10 @@ function AgentsView({
   mcpServers,
   onMcpUpsert,
   onMcpRemove,
+  piExtensions,
+  onPiRefresh,
+  onPiInstall,
+  onPiRemove,
 }: {
   conversations: Conversation[];
   harnesses: HarnessInfo[] | null;
@@ -335,6 +350,10 @@ function AgentsView({
   mcpServers: McpServerView[];
   onMcpUpsert: (input: McpServerInput) => void;
   onMcpRemove: (id: string) => void;
+  piExtensions: { extensions: PiExtension[]; piInstalled: boolean } | null;
+  onPiRefresh: () => Promise<void>;
+  onPiInstall: (source: string) => Promise<void>;
+  onPiRemove: (source: string) => Promise<void>;
 }) {
   const visible = (harnesses ?? []).filter((h) => h.id !== 'dsh');
   if (!harnesses) return <p className="px-2 py-4 text-center text-xs text-fg-3">检测中…</p>;
@@ -395,6 +414,14 @@ function AgentsView({
                   · {limitation}
                 </p>
               ))}
+              {h.id === 'pi' && (
+                <PiExtensionsSection
+                  state={piExtensions}
+                  onRefresh={onPiRefresh}
+                  onInstall={onPiInstall}
+                  onRemove={onPiRemove}
+                />
+              )}
             </div>
             {owned.map((c) => (
               <SidebarRow key={c.id} selected={false} onClick={() => onOpen(c.id)}>
