@@ -194,6 +194,26 @@ describe('CollaborationService', () => {
     ).rejects.toMatchObject({ code: 4012 });
   });
 
+  it('records a preview request for localhost urls and rejects anything remote', async () => {
+    const { conversations, collab, cwd } = setup();
+    const parent = await parentWithGoal(conversations, cwd);
+
+    expect(await collab.handlers.open_preview(parent.id, { url: 'localhost:5173/app' })).toEqual({
+      recorded: true,
+    });
+    expect(bodies(conversations, parent.id)).toContainEqual({
+      type: 'preview.requested',
+      url: 'http://localhost:5173/app',
+    });
+
+    await expect(
+      collab.handlers.open_preview(parent.id, { url: 'https://example.com' }),
+    ).rejects.toMatchObject({ code: CollaborationErrorCode.InvalidUrl });
+    await expect(
+      collab.handlers.open_preview(parent.id, { url: 'file:///etc/passwd' }),
+    ).rejects.toMatchObject({ code: CollaborationErrorCode.InvalidUrl });
+  });
+
   it('records a handoff request but refuses self and unsupported targets', async () => {
     const { conversations, tasks, collab, cwd } = setup();
     const parent = await parentWithGoal(conversations, cwd);

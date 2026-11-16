@@ -102,6 +102,14 @@ export const coreEventSchema = z.discriminatedUnion('type', [
     reason: z.string(),
   }),
   /**
+   * An agent asked to show a localhost page in the preview pane (D14,
+   * ADR 0019). Never auto-opens: the timeline card is the confirm point.
+   */
+  z.object({
+    type: z.literal('preview.requested'),
+    url: z.string(),
+  }),
+  /**
    * A handoff reached a final state (M4). `stopping_source`/`prepared` are
    * transient and never persisted; a blocked handoff is recorded as `aborted`
    * so the timeline explains why the owner did not change.

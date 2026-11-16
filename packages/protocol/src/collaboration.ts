@@ -46,6 +46,11 @@ export const collaborationTools = {
     params: z.object({ toHarnessId: harnessIdSchema, reason: z.string().min(1).max(500) }),
     result: z.object({ recorded: z.literal(true) }),
   },
+  open_preview: {
+    description: 'Ask the user to open a localhost page in the preview pane.',
+    params: z.object({ url: z.string().min(1).max(500) }),
+    result: z.object({ recorded: z.literal(true) }),
+  },
   read_task_context: {
     description: 'Read the task this conversation belongs to.',
     params: z.object({}),

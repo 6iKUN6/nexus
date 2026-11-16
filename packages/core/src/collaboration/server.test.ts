@@ -72,6 +72,7 @@ function setup(handlers?: Partial<Record<CollaborationTool, CollabHandler>>, max
     delegate: async () => ({ taskId: 'task-2', conversationId: 'conversation-2' }),
     report_result: async () => ({ taskId: 'task-1', status: 'review' }),
     request_handoff: async () => ({ recorded: true }),
+    open_preview: async () => ({ recorded: true }),
   };
   const server = startCollaborationServer({
     socketPath,

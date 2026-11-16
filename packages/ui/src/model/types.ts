@@ -97,6 +97,7 @@ export type TimelineItem =
       toHarnessId: HarnessId;
       reason: string;
     }
+  | { kind: 'previewRequest'; id: string; at: number; url: string }
   | { kind: 'system'; id: string; text: string };
 
 export type RunSummary = {

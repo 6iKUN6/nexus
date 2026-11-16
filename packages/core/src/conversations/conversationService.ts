@@ -172,7 +172,10 @@ export class ConversationService {
    */
   recordCollaborationEvent(
     conversationId: string,
-    body: Extract<ConversationEventBody, { type: 'agent.message' | 'handoff.requested' }>,
+    body: Extract<
+      ConversationEventBody,
+      { type: 'agent.message' | 'handoff.requested' | 'preview.requested' }
+    >,
   ): void {
     this.require(conversationId);
     const preview =
@@ -180,7 +183,9 @@ export class ConversationService {
         ? truncate(
             `${body.direction === 'out' ? '发送' : '收到'}协作消息：${body.text.replace(/\s+/g, ' ')}`,
           )
-        : truncate(`请求交接给 ${harnessLabel(body.toHarnessId)}：${body.reason}`);
+        : body.type === 'handoff.requested'
+          ? truncate(`请求交接给 ${harnessLabel(body.toHarnessId)}：${body.reason}`)
+          : truncate(`请求打开预览：${body.url}`);
     this.append(conversationId, body, { preview });
   }
 

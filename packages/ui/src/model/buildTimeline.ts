@@ -279,6 +279,9 @@ export function buildTimeline(events: readonly ConversationEvent[]): {
           reason: body.reason,
         });
         break;
+      case 'preview.requested':
+        items.push({ kind: 'previewRequest', id, at, url: body.url });
+        break;
       case 'task.updated': {
         // Fold the transition into the existing card; a missing card (gap in
         // the log) is skipped, the task list RPC is the fallback source.

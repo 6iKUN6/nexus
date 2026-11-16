@@ -1,5 +1,5 @@
 import { Button } from '@arco-design/web-react';
-import { IconMessage, IconSwap } from '@arco-design/web-react/icon';
+import { IconLaunch, IconMessage, IconPublic, IconSwap } from '@arco-design/web-react/icon';
 import type { MessageRecord, MessageState } from '@nexus/protocol';
 import type { TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
@@ -105,6 +105,50 @@ export function HandoffRequestCard({
       <p className="nx-selectable m-0 mt-1.5 whitespace-pre-wrap text-[13px] text-fg-1">
         {item.reason}
       </p>
+    </section>
+  );
+}
+
+/**
+ * An agent asked to show a localhost page (ADR 0019). The card is the confirm
+ * point: nothing opens until the user clicks, and it stays clickable so the
+ * preview can be reopened later.
+ */
+export function PreviewRequestCard({
+  item,
+  onOpenLocalUrl,
+}: {
+  item: Of<'previewRequest'>;
+  onOpenLocalUrl: (url: string) => void;
+}) {
+  return (
+    <section
+      aria-label={`预览请求：${item.url}`}
+      className="rounded-lg border border-line-1 bg-elevated px-3 py-2"
+    >
+      <div className="flex items-center gap-2 text-xs">
+        <span className="flex items-center gap-1 rounded bg-tint-2 px-1.5 py-0.5 font-medium text-fg-2">
+          <IconPublic /> 预览请求
+        </span>
+        <span className="nx-selectable min-w-0 flex-1 truncate font-mono text-[11px] text-fg-1">
+          {item.url}
+        </span>
+        <Button
+          type="primary"
+          size="mini"
+          icon={<IconPublic />}
+          onClick={() => onOpenLocalUrl(item.url)}
+        >
+          打开预览
+        </Button>
+        <Button
+          type="text"
+          size="mini"
+          icon={<IconLaunch />}
+          aria-label="在浏览器中打开"
+          onClick={() => window.open(item.url, '_blank')}
+        />
+      </div>
     </section>
   );
 }

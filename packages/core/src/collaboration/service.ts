@@ -3,6 +3,7 @@ import {
   type CollaborationTool,
   type Conversation,
   type HarnessId,
+  normalizeLocalUrl,
   RpcError,
   type Task,
 } from '@nexus/protocol';
@@ -34,6 +35,7 @@ export const CollaborationErrorCode = {
   NotASubtask: 4020,
   SelfHandoff: 4021,
   HarnessUnsupported: 4022,
+  InvalidUrl: 4023,
 } as const;
 
 export class CollaborationService {
@@ -44,6 +46,24 @@ export class CollaborationService {
   }
 
   readonly handlers: Record<CollaborationTool, CollabHandler> = {
+    open_preview: async (conversationId, params) => {
+      const { url } = params as { url: string };
+      // Same whitelist as the preview pane itself (ADR 0014): localhost only.
+      const normalized = normalizeLocalUrl(url);
+      if (!normalized) {
+        throw new RpcError(
+          CollaborationErrorCode.InvalidUrl,
+          '仅支持本机地址（localhost / 127.0.0.1）',
+        );
+      }
+      // Recorded only: the timeline card asks the user before opening.
+      this.deps.conversations.recordCollaborationEvent(conversationId, {
+        type: 'preview.requested',
+        url: normalized,
+      });
+      return { recorded: true as const };
+    },
+
     read_task_context: async (conversationId) => {
       const conversation = this.deps.conversations.get(conversationId);
       return this.context(conversation);

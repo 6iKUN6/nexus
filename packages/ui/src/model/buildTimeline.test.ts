@@ -237,9 +237,15 @@ describe('buildTimeline collaboration (D14)', () => {
           text: '需要确认登录跳转的规则',
         },
         { type: 'handoff.requested', toHarnessId: 'codex', reason: '这个任务更适合 Codex' },
+        { type: 'preview.requested', url: 'http://localhost:5173/' },
       ),
     );
-    expect(items.map((item) => item.kind)).toEqual(['agentMessage', 'handoffRequest']);
+    expect(items.map((item) => item.kind)).toEqual([
+      'agentMessage',
+      'handoffRequest',
+      'previewRequest',
+    ]);
+    expect(items[2]).toMatchObject({ url: 'http://localhost:5173/' });
     expect(items[0]).toMatchObject({
       direction: 'in',
       peerConversationId: 'child-1',

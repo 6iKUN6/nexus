@@ -4,7 +4,7 @@ import type { HarnessId, MessageRecord, PermissionOption, TaskEvidence } from '@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { PERSONAS, type TimelineItem } from '../model/types';
 import { AgentAvatar } from '../workspace/AgentAvatar';
-import { AgentMessageCard, HandoffRequestCard } from './CollaborationCards';
+import { AgentMessageCard, HandoffRequestCard, PreviewRequestCard } from './CollaborationCards';
 import { DelegationCard } from './DelegationCard';
 import { HandoffCard } from './HandoffCard';
 import { MessageText } from './MessageText';
@@ -257,6 +257,9 @@ function TimelineRow({
           )}
           {item.kind === 'handoffRequest' && (
             <HandoffRequestCard item={item} onRequest={onRequestHandoff} />
+          )}
+          {item.kind === 'previewRequest' && (
+            <PreviewRequestCard item={item} onOpenLocalUrl={onOpenLocalUrl ?? (() => {})} />
           )}
         </div>
       );
