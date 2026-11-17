@@ -80,7 +80,7 @@ export function McpServersSection({
       {servers.length === 0 ? (
         <p className="m-0 rounded-lg border border-dashed border-line-2 px-2.5 py-2 text-[11px] leading-relaxed text-fg-3">
           还没有 MCP server。添加后可在会话详情里按会话启用；仅支持 MCP 的 harness 会加载（pi
-          不支持，Codex 注入待验证）。
+          不支持）。
         </p>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-1 p-0">

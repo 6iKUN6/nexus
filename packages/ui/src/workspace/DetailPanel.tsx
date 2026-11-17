@@ -289,8 +289,11 @@ function McpOptIn({
   onConfigure: (patch: { enabledMcpIds?: string[] }) => void;
 }) {
   if (servers.length === 0) return null;
+  // Injection is verified for Claude (SDK mcpServers) and Codex
+  // (thread config.mcp_servers, ADR 0020); pi has extensions instead.
   const injectable =
-    conversation.harnessId === 'claude-code' && harness?.capabilities?.mcp === true;
+    (conversation.harnessId === 'claude-code' || conversation.harnessId === 'codex') &&
+    harness?.capabilities?.mcp === true;
   const available = servers.filter((server) => server.enabled);
   return (
     <div className="mt-2 border-t border-line-1 pt-2">
@@ -299,9 +302,7 @@ function McpOptIn({
         <p className="m-0 mt-1 text-[11px] leading-relaxed text-fg-3">
           {conversation.harnessId === 'pi'
             ? 'pi 不支持 MCP；它的拓展在 Agents 视图管理。'
-            : conversation.harnessId === 'codex'
-              ? 'Codex 的按会话注入机制待验证，暂不可用。'
-              : '当前执行者不支持 MCP 注入。'}
+            : '当前执行者不支持 MCP 注入。'}
         </p>
       ) : (
         <div className="mt-1 flex flex-col gap-1">

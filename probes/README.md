@@ -21,6 +21,12 @@ M0 结果写入 `probes/output/<harness>/<scenario>/<时间戳>/`（已加入 gi
 
 M2 侦察（`src/appserver.ts`，独立运行器）录制长连接协议的双向流量（`wire.jsonl`，方向+时间戳）：
 codex 为 initialize → thread/start → turn/start →（审批/中断/续传），pi 为 get_state → prompt →（写文件/abort）。
+
+D23 侦察（`src/mcpInject.ts`，独立运行器，`npx tsx src/mcpInject.ts`）验证 codex 的按线程
+MCP 注入：`thread/start.config.mcp_servers` 注入假 server → 状态查询 → 一次最小额度 turn
+（模型是否调用注入工具）→ 跨进程 resume 带新 config → 免配额 `mcpServer/tool/call` 直连。
+`NEXUS_PROBE_SKIP_TURN=1` 跳过额度 turn；`NEXUS_PROBE_POLICY=on-request` 观察审批请求形态；
+`NEXUS_PROBE_RESUME_THREAD=<id>` 续传指定旧线程。结论见 ADR 0020 §4。
 脱敏后复制为适配器 fixtures（`packages/adapters/<name>/fixtures/`）。
 - `help.*.txt`：CLI 帮助和版本信息
 - `summary.json`：自动观察项，包括退出码、耗时、首次输出延迟、JSON 行占比、事件类型统计、session id、取消过程、残留进程

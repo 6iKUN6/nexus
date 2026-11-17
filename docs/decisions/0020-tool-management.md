@@ -26,12 +26,20 @@
 
 core 为每个 pi 会话生成 `<userData>/bin/nexus-bridge.ts`（pi extension：默认导出函数，`pi.registerTool` 注册六个协作工具，参数 schema 用普通 JSON Schema 字面量，execute 直接走 NDJSON socket 认证调用），spawn 时加 `-e <path>`。取代委派 brief 里的 `$NEXUS_HELPER_PATH` 文本提示（brief 不再写协作命令段）。`-e` 是显式加载，与 `--no-extensions` 的用户设置正交。
 
-### 4. Codex MCP 注入
+### 4. Codex MCP 注入（2026-11-17 已验证，codex 0.154.0）
 
-`InitializeCapabilities` 里只有 MCP elicitation 扩展，没有注入点；config.toml 是全局的。跑一个配额 probe：app-server initialize/newConversation 是否接受 per-session `mcpServers`。**未验证前 Codex 侧 UI 如实显示"待验证"**，不伪造。probe 场景执行前再与开发者确认。
+probe（`probes/src/mcpInject.ts`，两次最小额度调用 + 多个零配额步骤，记录在 `probes/output/codex/mcp-inject/`）结论：
+
+- `thread/start` 与 `thread/resume` 都接受 config.toml 形状的 `config` 覆盖，`config.mcp_servers` 按线程注入：全局 `mcpServerStatus/list` 看不到注入的 server，用户自己的 codex 配置不受影响。
+- 模型能发现并调用注入的工具；**跨进程 resume 带新 config 生效**（重启恢复可用新 token 重新注入）。同进程 resume 是 no-op，与 Nexus 无关。
+- MCP 工具调用审批以 `mcpServer/elicitation/request`（`_meta.codex_approval_kind: 'mcp_tool_call'`）到达，响应是 elicitation 三元 `{action: accept/decline/cancel, content, _meta}`。codex 提供 persist（session/always）但其响应形状未验证，v1 只提供"允许一次/拒绝"。
+- 另有免配额的 `mcpServer/tool/call` 直连调用（客户端主动调用，不经模型）。
+
+adapter 据此在 `thread/start`/`thread/resume` 注入 `nexus`（协作 helper）+ 用户勾选的 server，并把 elicitation 审批映射成权限卡片。
 
 ## 后果
 
 - 用户在 Agents 视图管理 MCP server 和 pi 拓展；会话详情面板勾选本会话启用的 MCP server。
 - protocol 新增 `mcpServerConfigSchema` 与 `mcp.list/upsert/remove`、`pi.extension.list/install/remove`；`Conversation` 增 `enabledMcpIds`——已获两位开发者同意（本 ADR）。
 - 用户的 MCP server 是任意本地命令：UI 明示"server 进程以会话权限运行"，沿用 harness 纯血原则（只做增量注入，不代理不拦截）。
+- Codex 的 MCP 工具调用每次都要用户在权限卡片上确认（codex 的 persist 响应形状未验证）；这是 codex 的默认安全姿态，与 Nexus 的权限模型一致。

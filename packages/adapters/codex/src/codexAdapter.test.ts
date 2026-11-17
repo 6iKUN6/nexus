@@ -195,6 +195,112 @@ describe('codex adapter session', () => {
     expect(events.at(-1)).toMatchObject({ type: 'run.completed', stopReason: 'end_turn' });
   });
 
+  it('injects the collaboration channel and opted-in MCP servers via config.mcp_servers', async () => {
+    const { child, stdinLines } = fakeCodexProcess('appserver-basic.jsonl');
+    const adapter = createCodexAdapter({ spawnImpl: spawnReturning(child) });
+    await adapter.createSession({
+      ...sessionOptions,
+      collaboration: {
+        socketPath: '/tmp/nexus.sock',
+        token: 'tok-1',
+        helperPath: '/tmp/nexus-helper',
+      },
+      mcpServers: [
+        { key: 'nx_ab12', command: 'npx', args: ['-y', 'server-everything'], env: { A: '1' } },
+      ],
+    });
+    expect(stdinLines.find((m) => m.method === 'thread/start')).toMatchObject({
+      params: {
+        config: {
+          mcp_servers: {
+            nexus: {
+              command: '/tmp/nexus-helper',
+              args: ['mcp'],
+              env: { NEXUS_SOCKET: '/tmp/nexus.sock', NEXUS_TOKEN: 'tok-1' },
+            },
+            nx_ab12: { command: 'npx', args: ['-y', 'server-everything'], env: { A: '1' } },
+          },
+        },
+      },
+    });
+  });
+
+  it('re-injects config.mcp_servers on thread/resume (fresh token after a restart)', async () => {
+    const { child, stdinLines } = fakeCodexProcess('appserver-resume.jsonl');
+    const adapter = createCodexAdapter({ spawnImpl: spawnReturning(child) });
+    const resume = adapter.resumeSession?.bind(adapter);
+    if (!resume) throw new Error('adapter is missing resumeSession');
+    await resume('01a1c429-f55d-73d3-bcd5-2ef04ca71b77', {
+      ...sessionOptions,
+      collaboration: {
+        socketPath: '/tmp/nexus.sock',
+        token: 'tok-2',
+        helperPath: '/tmp/nexus-helper',
+      },
+    });
+    expect(stdinLines.find((m) => m.method === 'thread/resume')).toMatchObject({
+      params: {
+        threadId: '01a1c429-f55d-73d3-bcd5-2ef04ca71b77',
+        excludeTurns: true,
+        config: {
+          mcp_servers: {
+            nexus: {
+              command: '/tmp/nexus-helper',
+              args: ['mcp'],
+              env: { NEXUS_SOCKET: '/tmp/nexus.sock', NEXUS_TOKEN: 'tok-2' },
+            },
+          },
+        },
+      },
+    });
+  });
+
+  it('routes MCP tool call approvals (elicitation) to a permission card and answers accept', async () => {
+    const { child, stdinLines } = fakeCodexProcess('appserver-mcp-approval.jsonl');
+    const adapter = createCodexAdapter({ spawnImpl: spawnReturning(child) });
+    const session = await adapter.createSession(sessionOptions);
+
+    const respond = session.respondToPermission?.bind(session);
+    if (!respond) throw new Error('session is missing respondToPermission');
+    const events = await collect(session, 'r1', (event) => {
+      if (event.type === 'permission.requested') {
+        void respond(event.requestId, 'allow_once');
+      }
+    });
+
+    const permission = events.find((e) => e.type === 'permission.requested');
+    expect(permission).toMatchObject({
+      requestId: 'codex-0',
+      description: 'MCP 工具调用：nexus / send_message',
+    });
+    // No "always allow" until codex's persist response shape is verified.
+    expect((permission as { options?: Array<{ id: string }> }).options?.map((o) => o.id)).toEqual([
+      'allow_once',
+      'reject_once',
+    ]);
+
+    const answer = stdinLines.find((m) => m.id === 0 && m.method === undefined);
+    expect(answer).toMatchObject({ result: { action: 'accept', content: {}, _meta: null } });
+    expect(events.at(-1)).toMatchObject({ type: 'run.completed', stopReason: 'end_turn' });
+  });
+
+  it('answers a rejected MCP tool call approval with decline', async () => {
+    const { child, stdinLines } = fakeCodexProcess('appserver-mcp-approval.jsonl');
+    const adapter = createCodexAdapter({ spawnImpl: spawnReturning(child) });
+    const session = await adapter.createSession(sessionOptions);
+
+    const respond = session.respondToPermission?.bind(session);
+    if (!respond) throw new Error('session is missing respondToPermission');
+    await collect(session, 'r1', (event) => {
+      if (event.type === 'permission.requested') {
+        void respond(event.requestId, 'reject_once');
+      }
+    });
+
+    const answer = stdinLines.find((m) => m.id === 0 && m.method === undefined);
+    expect(answer).toMatchObject({ result: { action: 'decline', content: null, _meta: null } });
+  });
+
   it('pins the approval policy instead of inheriting a permissive config', async () => {
     const { child, stdinLines } = fakeCodexProcess('appserver-basic.jsonl');
     const adapter = createCodexAdapter({ spawnImpl: spawnReturning(child) });

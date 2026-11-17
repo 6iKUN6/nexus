@@ -31,7 +31,12 @@ export type CodexAdapterOptions = {
   spawnImpl?: typeof spawn;
 };
 
-type ApprovalKind = 'commandExecution' | 'fileChange' | 'legacyExec' | 'legacyPatch';
+type ApprovalKind =
+  | 'commandExecution'
+  | 'fileChange'
+  | 'legacyExec'
+  | 'legacyPatch'
+  | 'mcpToolCall';
 
 type PendingApproval = {
   runId: string;
@@ -48,6 +53,15 @@ const PERMISSION_OPTIONS: PermissionOption[] = [
 ];
 
 function decisionFor(kind: ApprovalKind, optionId: string): unknown {
+  // MCP tool call approvals arrive as elicitation requests (probed
+  // 2026-11-17): accept with an (empty) form content, decline otherwise.
+  // Session persistence is offered by codex but its response shape is
+  // unverified, so only allow_once is offered for these.
+  if (kind === 'mcpToolCall') {
+    return optionId === 'reject_once'
+      ? { action: 'decline', content: null, _meta: null }
+      : { action: 'accept', content: {}, _meta: null };
+  }
   if (kind === 'legacyExec' || kind === 'legacyPatch') {
     if (optionId === 'allow_always') return { decision: 'approved_for_session' };
     if (optionId === 'reject_once') {
@@ -61,10 +75,17 @@ function decisionFor(kind: ApprovalKind, optionId: string): unknown {
 }
 
 function declineFor(kind: ApprovalKind): unknown {
+  if (kind === 'mcpToolCall') return { action: 'cancel', content: null, _meta: null };
   return kind === 'legacyExec' || kind === 'legacyPatch'
     ? { decision: 'abort' }
     : { decision: 'cancel' };
 }
+
+/** MCP tool calls get no "always allow" until codex's persist shape is verified. */
+const MCP_PERMISSION_OPTIONS: PermissionOption[] = [
+  { id: 'allow_once', label: '允许一次', kind: 'allow_once' },
+  { id: 'reject_once', label: '拒绝', kind: 'reject_once' },
+];
 
 export function createCodexAdapter(options: CodexAdapterOptions = {}): AgentAdapter {
   const spawnImpl = options.spawnImpl ?? spawn;
@@ -102,10 +123,38 @@ export function createCodexAdapter(options: CodexAdapterOptions = {}): AgentAdap
 
 async function createCodexSession(
   spawnImpl: typeof spawn,
-  { cwd, executablePath, env }: CreateSessionOptions,
+  { cwd, executablePath, env, collaboration, mcpServers }: CreateSessionOptions,
   resumeThreadId: string | null,
 ): Promise<AdapterSession> {
   if (!executablePath) throw new Error('未找到 codex 可执行文件，请先安装 Codex CLI。');
+
+  // MCP injection (D23, ADR 0020; probed 2026-11-17, codex 0.154.0):
+  // thread/start and thread/resume accept a config.toml-shaped `config`
+  // override whose mcp_servers are scoped to the thread — the user's own
+  // codex config is untouched, and a resume re-injects with the fresh
+  // per-session token (the cross-process resume honours the override).
+  const mcpServerEntries: Record<string, unknown> = {
+    ...(collaboration
+      ? {
+          nexus: {
+            command: collaboration.helperPath,
+            args: ['mcp'],
+            env: {
+              NEXUS_SOCKET: collaboration.socketPath,
+              NEXUS_TOKEN: collaboration.token,
+            },
+          },
+        }
+      : {}),
+    ...Object.fromEntries(
+      (mcpServers ?? []).map((server) => [
+        server.key,
+        { command: server.command, args: server.args, env: server.env },
+      ]),
+    ),
+  };
+  const threadConfig =
+    Object.keys(mcpServerEntries).length > 0 ? { config: { mcp_servers: mcpServerEntries } } : {};
 
   const child = spawnImpl(executablePath, ['app-server'], {
     cwd,
@@ -123,11 +172,16 @@ async function createCodexSession(
     });
     link.notify('initialized');
     const started = resumeThreadId
-      ? await link.request('thread/resume', { threadId: resumeThreadId, excludeTurns: true })
+      ? await link.request('thread/resume', {
+          threadId: resumeThreadId,
+          excludeTurns: true,
+          ...threadConfig,
+        })
       : await link.request('thread/start', {
           cwd,
           approvalPolicy: 'on-request',
           sandbox: 'workspace-write',
+          ...threadConfig,
         });
     const thread = (started as { thread?: { id?: string } }).thread;
     if (!thread?.id) throw new Error('codex 没有返回会话 id');
@@ -207,12 +261,17 @@ function buildSession(link: StdioJsonRpc, threadId: string): AdapterSession {
           unknown
         >;
         const requestId = `codex-${String(id)}`;
-        const offer = (kind: ApprovalKind, description: string, toolCallId: string | null) => {
+        const offer = (
+          kind: ApprovalKind,
+          description: string,
+          toolCallId: string | null,
+          options: PermissionOption[] = PERMISSION_OPTIONS,
+        ) => {
           approvals.set(requestId, {
             runId,
             kind,
             requestWireId: id,
-            allowedOptions: new Set(PERMISSION_OPTIONS.map((o) => o.id)),
+            allowedOptions: new Set(options.map((o) => o.id)),
           });
           queue.push({
             type: 'permission.requested',
@@ -220,7 +279,7 @@ function buildSession(link: StdioJsonRpc, threadId: string): AdapterSession {
             requestId,
             toolCallId,
             description,
-            options: PERMISSION_OPTIONS,
+            options,
           });
         };
         switch (method) {
@@ -252,6 +311,30 @@ function buildSession(link: StdioJsonRpc, threadId: string): AdapterSession {
           case 'applyPatchApproval':
             offer('legacyPatch', '应用补丁', null);
             break;
+          case 'mcpServer/elicitation/request': {
+            // Codex routes MCP tool call approvals through elicitation with
+            // codex_approval_kind 'mcp_tool_call' (probed 2026-11-17). Other
+            // elicitations are real form prompts Nexus cannot render.
+            const meta = (typeof p._meta === 'object' && p._meta !== null ? p._meta : {}) as Record<
+              string,
+              unknown
+            >;
+            if (meta.codex_approval_kind !== 'mcp_tool_call') {
+              link.respondError(id, `Nexus 不支持该请求: ${method}`);
+              break;
+            }
+            const serverName = typeof p.serverName === 'string' ? p.serverName : 'MCP server';
+            // The tool name only exists inside codex's English message.
+            const toolName =
+              typeof p.message === 'string' ? /run tool "([^"]+)"/.exec(p.message)?.[1] : null;
+            offer(
+              'mcpToolCall',
+              `MCP 工具调用：${serverName}${toolName ? ` / ${toolName}` : ''}`,
+              null,
+              MCP_PERMISSION_OPTIONS,
+            );
+            break;
+          }
           default:
             // Requests Nexus cannot render (elicitation, tool input, …) are
             // declined so the turn never hangs waiting for us.

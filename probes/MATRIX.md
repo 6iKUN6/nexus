@@ -23,7 +23,7 @@
 | 权限请求可被宿主应答 | ◐ headless 模式下自动拒绝，并记录在 `result.permission_denials`；要应答需用 SDK 或 `--permission-prompt-tool` | ◐ `exec` 默认只读沙箱，直接拒绝，没有审批事件；app-server 有 `item/*/requestApproval` | ✗ **没有权限拦截，直接写入了文件** |
 | 取消后无残留进程 | ✓ 对进程组发 SIGINT 即可，最后还会输出 `result`（exit 0） | ✓ SIGINT 后 exit 1 | ✓ 被 SIGINT 终止 |
 | 会话恢复 | ✓ `--resume <session_id>` | ✓ `exec resume <thread_id>` | ✓ `--session-id`，id 可以由宿主预先指定 |
-| 加载 MCP | ？ | ？ | ？（AionCore 记录 pi 不加载 stdio MCP） |
+| 加载 MCP | ✅ SDK `mcpServers` 按会话注入 | ✅ `thread/start`/`thread/resume` 的 `config.mcp_servers` 按线程注入（0.154.0 已验证，probes/output/codex/mcp-inject）；工具调用审批走 `mcpServer/elicitation/request` | ❌（pi 不加载 stdio MCP，用 extension） |
 | 用量 / token 信息 | ？ | ？ | ？ |
 | 未登录时的错误可识别 | ？ | ？ | ？ |
 
