@@ -140,6 +140,72 @@ await until(
 );
 check('重开后允许权限，运行正常完成', true);
 
+// Concurrent conversations must not cross streams (acceptance scenario 1):
+// A waits on its permission while B runs; approving A completes A only, and
+// neither timeline ever shows the other's content. Assertions are scoped to
+// the timeline ([role=log]) because the sidebar lists both titles.
+const timelineIncludes = (text) =>
+  `document.querySelector('[role=log]').innerText.includes('${text}')`;
+await type('textarea', '甲流测试');
+await ev(`document.querySelector('textarea').focus()`);
+await key('Enter', 'Enter');
+await until(timelineIncludes('Fake 请求权限'), 'A waiting', 15000);
+
+// Create conversation B (Fake, same project dir) entirely by keyboard+dialog.
+await key('t', 'KeyT', 4);
+await until(`!!document.querySelector('.arco-modal')`, 'B dialog');
+await until(
+  `[...document.querySelectorAll('.arco-modal .arco-radio')].some(r => r.innerText.includes('Fake'))`,
+  'B harness list',
+  30000,
+);
+await ev(
+  `[...document.querySelectorAll('.arco-modal .arco-radio')].find(r => r.innerText.includes('Fake')).click()`,
+);
+await type('.arco-modal input.font-mono', `${process.env.NEXUS_E2E_DIR}/project`);
+await ev(
+  `[...document.querySelectorAll('.arco-modal button')].find(b => b.innerText.trim() === '创建').click()`,
+);
+await until(`document.body.innerText.includes('和 Fake 开始对话')`, 'B created');
+await type('textarea', '乙流测试');
+await ev(`document.querySelector('textarea').focus()`);
+await key('Enter', 'Enter');
+await until(timelineIncludes('Fake 请求权限'), 'B waiting', 15000);
+check('B 运行中，A 的等待不受影响', true);
+
+// Back to A (⌘1): its timeline must not mention B's prompt; approve and finish.
+await key('1', 'Digit1', 4);
+await until(
+  `document.querySelector('[role=tab][aria-selected="true"]').title === '整理 notes'`,
+  'A focused',
+);
+check('A 的时间线不含 B 的内容', await ev(`!${timelineIncludes('乙流测试')}`));
+await click('text=允许');
+await until(timelineIncludes('已完成：甲流测试'), 'A done', 15000);
+
+// To B (⌘2): still waiting, no sign of A; approve and finish.
+await key('2', 'Digit2', 4);
+await until(
+  `document.querySelector('[role=tab][aria-selected="true"]').title === '乙流测试'`,
+  'B focused',
+);
+check('B 的时间线不含 A 的内容', await ev(`!${timelineIncludes('甲流测试')}`));
+check(
+  'B 仍在等待自己的授权',
+  await ev(`[...document.querySelectorAll('button')].some(b => b.innerText.trim() === '停止运行')`),
+);
+await click('text=允许');
+await until(timelineIncludes('已完成：乙流测试'), 'B done', 15000);
+
+// A again: B's completion must not have leaked into A's timeline either.
+await key('1', 'Digit1', 4);
+await until(
+  `document.querySelector('[role=tab][aria-selected="true"]').title === '整理 notes'`,
+  'A focused again',
+);
+check('A 完成后仍不含 B 的内容', await ev(`!${timelineIncludes('乙流测试')}`));
+// Stay on A: every scenario after this point runs in the original conversation.
+
 // Harness management view (D13): capabilities and auth from the adapter probe
 await click('text=Agents');
 check(
