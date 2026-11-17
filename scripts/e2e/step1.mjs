@@ -92,11 +92,12 @@ check(
 await until(`document.body.innerText.includes('Fake 请求权限')`, 'second run permission', 8000);
 check('排队的第二条自动开始运行', !(await ev(`document.body.innerText.includes('排队中 ·')`)));
 
-// Stop the second run while it waits for permission
-await click('text=停止运行');
+// Stop the second run with the keyboard (⌘.) while it waits for permission
+// (acceptance scenario 3: the run lifecycle is keyboard-reachable).
+await key('.', 'Period', 4);
 await until(`document.body.innerText.includes('你停止了这次运行')`, 'stopped');
 check(
-  '停止运行 → “你停止了这次运行”，权限请求失效',
+  '⌘. 停止运行 → “你停止了这次运行”，权限请求失效',
   await ev(`document.body.innerText.includes('权限请求已失效')`),
 );
 check(
@@ -105,6 +106,39 @@ check(
     `document.body.innerText.includes('运行记录 · 2') && document.body.innerText.includes('已停止')`,
   ),
 );
+
+// Closing a tab must not stop its run (acceptance scenario 2): send, wait for
+// the permission prompt, close the tab with ⌘W, reopen from the sidebar —
+// the run is still waiting, and approving it completes the run.
+await type('textarea', '标签页关闭不中断');
+await ev(`document.querySelector('textarea').focus()`);
+await key('Enter', 'Enter');
+await until(`document.body.innerText.includes('Fake 请求权限')`, 'run waiting', 15000);
+await key('w', 'KeyW', 4);
+await until(
+  `![...document.querySelectorAll('[role=tab]')].some(t => t.getAttribute('aria-selected') === 'true' && t.title === '整理 notes')`,
+  'tab closed',
+);
+check('⌘W 关闭运行中的标签页', true);
+await ev(
+  `[...document.querySelectorAll('nav button')].find(b => b.innerText.includes('整理 notes')).click()`,
+);
+// The stop button only renders while a run is active: its presence proves
+// the run survived the tab close (old permission cards linger in history,
+// so matching their text would prove nothing).
+await until(
+  `[...document.querySelectorAll('button')].some(b => b.innerText.trim() === '停止运行')`,
+  'run still waiting',
+  10000,
+);
+check('重开标签页后运行仍在等待授权（未被关闭中断）', true);
+await click('text=允许');
+await until(
+  `document.body.innerText.includes('已完成：标签页关闭不中断')`,
+  'reopened run done',
+  15000,
+);
+check('重开后允许权限，运行正常完成', true);
 
 // Harness management view (D13): capabilities and auth from the adapter probe
 await click('text=Agents');

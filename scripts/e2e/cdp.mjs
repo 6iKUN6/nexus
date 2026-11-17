@@ -63,7 +63,8 @@ export async function connect(url) {
         key: k,
         code,
         modifiers,
-        windowsVirtualKeyCode: k === 'Enter' ? 13 : k.toUpperCase().charCodeAt(0),
+        windowsVirtualKeyCode:
+          { Enter: 13, Escape: 27, '.': 190 }[k] ?? k.toUpperCase().charCodeAt(0),
       });
   };
   const text = () => ev('document.body.innerText');

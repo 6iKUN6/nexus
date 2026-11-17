@@ -272,11 +272,20 @@ export function Workspace({
           event.preventDefault();
           open(target);
         }
+      } else if (
+        key === '.' &&
+        active &&
+        (active.state === 'running' || active.state === 'waiting_user')
+      ) {
+        // ⌘. cancels the active run (macOS cancel convention), so the whole
+        // run lifecycle is keyboard-reachable (acceptance scenario 3).
+        event.preventDefault();
+        store.cancel(active.id).catch(reportError);
       }
     };
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [activeId, ui.openIds, close, open, reopen]);
+  }, [activeId, ui.openIds, active, close, open, reopen, store]);
 
   const send = () => {
     if (!active) return;

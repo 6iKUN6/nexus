@@ -41,9 +41,11 @@ export function ConversationHeader({
         </div>
       </div>
       {busy && (
-        <Button size="small" status="danger" icon={<IconRecordStop />} onClick={onStop}>
-          停止运行
-        </Button>
+        <Tooltip content="停止运行 ⌘." mini>
+          <Button size="small" status="danger" icon={<IconRecordStop />} onClick={onStop}>
+            停止运行
+          </Button>
+        </Tooltip>
       )}
       <Tooltip content={previewOpen ? '关闭预览' : '预览 dev server'} mini>
         <Button
