@@ -42,7 +42,9 @@ export async function connect(url) {
       if (await ev(expr)) return true;
       await sleep(150);
     }
-    throw new Error(`timeout waiting for: ${label}`);
+    // On timeout, renderer errors are usually the real cause — surface them.
+    const detail = errors.length ? `; renderer errors: ${errors.join(' | ')}` : '';
+    throw new Error(`timeout waiting for: ${label}${detail}`);
   };
   const shot = async (file) => {
     const s = await send('Page.captureScreenshot', { format: 'png' });

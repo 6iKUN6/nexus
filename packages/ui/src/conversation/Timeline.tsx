@@ -31,6 +31,9 @@ type TimelineProps = {
   onOpenLocalUrl?: (url: string) => void;
 };
 
+/** Rendered tail size; grows by the same step when scrolling to older items. */
+const TAIL_WINDOW = 100;
+
 const time = (at: number) =>
   new Date(at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false });
 
@@ -59,6 +62,24 @@ export function Timeline({
   const [hasNew, setHasNew] = useState(false);
   const loaded = items !== null;
 
+  // Tail window (D21 performance budget): mounting ~700 cards at once blows
+  // the 150ms tab-switch budget, so only the newest WINDOW items render;
+  // scrolling near the top prepends earlier ones. renderCount never shrinks
+  // while the conversation stays open, so reading position is stable.
+  const [renderCount, setRenderCount] = useState(TAIL_WINDOW);
+  const [windowFor, setWindowFor] = useState(conversationId);
+  if (windowFor !== conversationId) {
+    // React-sanctioned reset during render: a different conversation always
+    // starts from the tail again.
+    setWindowFor(conversationId);
+    setRenderCount(TAIL_WINDOW);
+  }
+  const prependAnchorRef = useRef<number | null>(null);
+  const all = items ?? [];
+  const startIndex = Math.max(0, all.length - renderCount);
+  const visible = all.slice(startIndex);
+  const hiddenCount = startIndex;
+
   // New conversation (or its history just arrived): jump to the end.
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs when the conversation or load state changes
   useLayoutEffect(() => {
@@ -77,11 +98,26 @@ export function Timeline({
     else setHasNew(true);
   }, [revision]);
 
+  // After a prepend, keep the same content under the cursor: the scroll
+  // height grew by exactly the height of the newly rendered older items.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: must re-run exactly when renderCount changes
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (el && prependAnchorRef.current !== null) {
+      el.scrollTop += el.scrollHeight - prependAnchorRef.current;
+      prependAnchorRef.current = null;
+    }
+  }, [renderCount]);
+
   const onScroll = () => {
     const el = scrollRef.current;
     if (!el) return;
     atBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 40;
     if (atBottomRef.current) setHasNew(false);
+    if (el.scrollTop < 200 && hiddenCount > 0) {
+      prependAnchorRef.current = el.scrollHeight;
+      setRenderCount((count) => count + TAIL_WINDOW);
+    }
   };
 
   return (
@@ -101,23 +137,35 @@ export function Timeline({
           ) : items.length === 0 ? (
             <EmptyConversation agent={agent} />
           ) : (
-            items.map((item, index) => (
-              <TimelineRow
-                onOpenLocalUrl={onOpenLocalUrl}
-                key={item.id}
-                item={item}
-                previous={items[index - 1]}
-                agent={agent}
-                onPermission={onPermission}
-                onRetry={item.kind === 'failure' && index === items.length - 1 ? onRetry : null}
-                onOpenConversation={onOpenConversation}
-                onTaskRespond={onTaskRespond}
-                onRequestHandoff={onRequestHandoff}
-                messageStates={messageStates}
-                onResendMessage={onResendMessage}
-                onLoadEvidence={onLoadEvidence}
-              />
-            ))
+            <>
+              {hiddenCount > 0 && (
+                <p className="m-0 text-center text-[11px] text-fg-4">
+                  上滑加载更早的消息（还有 {hiddenCount} 条）
+                </p>
+              )}
+              {visible.map((item, index) => {
+                const fullIndex = startIndex + index;
+                return (
+                  <TimelineRow
+                    onOpenLocalUrl={onOpenLocalUrl}
+                    key={item.id}
+                    item={item}
+                    previous={all[fullIndex - 1]}
+                    agent={agent}
+                    onPermission={onPermission}
+                    onRetry={
+                      item.kind === 'failure' && fullIndex === all.length - 1 ? onRetry : null
+                    }
+                    onOpenConversation={onOpenConversation}
+                    onTaskRespond={onTaskRespond}
+                    onRequestHandoff={onRequestHandoff}
+                    messageStates={messageStates}
+                    onResendMessage={onResendMessage}
+                    onLoadEvidence={onLoadEvidence}
+                  />
+                );
+              })}
+            </>
           )}
         </div>
       </div>

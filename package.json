@@ -27,7 +27,8 @@
     "brand": "node scripts/brand.ts",
     "test:contract": "NEXUS_CONTRACT=1 vitest run",
     "e2e:smoke": "scripts/e2e/smoke.sh",
-    "hooks:install": "git config core.hooksPath .githooks"
+    "hooks:install": "git config core.hooksPath .githooks",
+    "e2e:perf": "scripts/e2e/perf.sh"
   },
   "devDependencies": {
     "@biomejs/biome": "2.6.5",

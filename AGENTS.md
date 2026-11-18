@@ -14,6 +14,7 @@ pnpm dev              # run the desktop app with hot reload
                       #   NEXUS_VIBRANCY=0       solid sidebar (needed for CDP screenshots)
 pnpm check            # lint + typecheck + boundary rules + tests (CI runs exactly this)
 pnpm e2e:smoke        # drive the real app via CDP with the Fake harness (no quota, ~40s, macOS)
+pnpm e2e:perf         # performance budgets (D21): seeded 10k-event fixture, tab-switch/enqueue p95, long tasks
 pnpm test:contract    # tests against REAL harness CLIs — spends quota, ask first
 pnpm lint:fix         # Biome autofix + format
 pnpm test:watch       # Vitest watch mode

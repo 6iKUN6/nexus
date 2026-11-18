@@ -15,7 +15,9 @@ await until(`!!document.querySelector('.arco-modal')`, 'modal');
 await until(
   `document.querySelectorAll('.arco-modal .arco-radio').length >= 4`,
   'harness list',
-  30000,
+  // 30s was enough on an idle machine; under load (back-to-back runs) the
+  // login-shell probe of three real CLIs needs longer.
+  60000,
 );
 const radios = await ev(
   `[...document.querySelectorAll('.arco-modal .arco-radio')].map(r => r.innerText.replace(/\\s+/g,' ').trim() + (r.classList.contains('arco-radio-disabled') ? ' [disabled]' : ''))`,
@@ -378,6 +380,12 @@ if (!hasTarget) {
     'drawer gone',
   );
   await type('textarea[aria-label="消息"]', '交接取消后继续');
+  // The input event updates React state asynchronously; clicking before the
+  // re-render hits a still-disabled button and the send is silently dropped.
+  await until(
+    `[...document.querySelectorAll('button')].some(b => b.innerText.trim() === '发送' && !b.disabled)`,
+    'send button enabled',
+  );
   await click('text=发送');
   // The demo script asks for permission before finishing, like any real run.
   await until(
