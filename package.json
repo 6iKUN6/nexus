@@ -31,7 +31,7 @@
     "e2e:perf": "scripts/e2e/perf.sh"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.5",
+    "@biomejs/biome": "2.6.7",
     "@types/node": "^24.0.0",
     "dependency-cruiser": "^18.7.2",
     "sharp": "^0.35.5",
