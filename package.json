@@ -31,11 +31,11 @@
     "e2e:perf": "scripts/e2e/perf.sh"
   },
   "devDependencies": {
-    "@biomejs/biome": "2.6.5",
+    "@biomejs/biome": "2.6.8",
     "@types/node": "^24.0.0",
-    "dependency-cruiser": "^18.7.2",
+    "dependency-cruiser": "^18.8.0",
     "sharp": "^0.35.5",
     "typescript": "~6.0.3",
-    "vitest": "^5.1.0"
+    "vitest": "^5.1.1"
   }
 }
